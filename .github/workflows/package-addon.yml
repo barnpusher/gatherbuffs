@@ -48,6 +48,7 @@ jobs:
             /^[[:space:]]*#/ { next }
             { print }
           ' "${toc_file}" | while IFS= read -r entry; do
+            entry="${entry//\\//}"
             mkdir -p "${stage_dir}/$(dirname "${entry}")"
             cp -R "${entry}" "${stage_dir}/${entry}"
           done
