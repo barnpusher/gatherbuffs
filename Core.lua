@@ -10,6 +10,7 @@ GB.ADDON_NAME = addonName or "GatherBuffs"
 GB.DEFAULTS = {
     locked = false,
     hideInCombat = false,
+    manuallyHidden = false,
     mainX = 200,
     mainY = -100,
     optX = nil,

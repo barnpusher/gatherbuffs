@@ -251,10 +251,12 @@ function GB:BuildMinimapButton()
         if button == "RightButton" then
             GB:ToggleContextMenu()
         else
-            if GB.mainFrame and GB.mainFrame:IsShown() then
-                GB.mainFrame:Hide()
+            if GB.db and GB.db.manuallyHidden then
+                GB:SetManualHidden(false)
+            elseif GB.mainFrame and GB.mainFrame:IsShown() then
+                GB:SetManualHidden(true)
             else
-                GB.mainFrame:Show()
+                GB:SetManualHidden(false)
             end
         end
     end)
@@ -348,7 +350,7 @@ function GB:InitializeContextMenu(_, level)
     addButton("Settings", function() GB:ToggleOptions() end)
     addButton("Info", function() GB:ToggleInfoPopup() end)
     addButton("Reset Position", function() GB:ResetMainPosition() end)
-    addButton("Hide", function() if GB.mainFrame then GB.mainFrame:Hide() end end)
+    addButton("Hide", function() GB:SetManualHidden(true) end)
 end
 
 function GB:ToggleContextMenu()

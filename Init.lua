@@ -1,5 +1,34 @@
 local _, GB = ...
 
+function GB:ShouldShowMainFrame()
+    local hasTrackedContent = (#(self.profOrder or {}) > 0) or self.hasFishing
+    if not hasTrackedContent then
+        return false
+    end
+    if self.db and self.db.manuallyHidden then
+        return false
+    end
+    if self.db and self.db.hideInCombat and InCombatLockdown() then
+        return false
+    end
+    return true
+end
+
+function GB:RefreshMainFrameVisibility()
+    if not self.mainFrame then
+        return
+    end
+    self.mainFrame:SetShown(self:ShouldShowMainFrame())
+end
+
+function GB:SetManualHidden(hidden)
+    if not self.db then
+        return
+    end
+    self.db.manuallyHidden = hidden and true or false
+    self:RefreshMainFrameVisibility()
+end
+
 function GB:CheckProfession()
     self.profMap, self.profOrder = GB.SnapshotProfessions()
     self.hasFishing = GB.HasProfessionByName("Fishing")
@@ -11,10 +40,10 @@ function GB:CheckProfession()
         end
     end
     if #self.profOrder > 0 or self.hasFishing then
-        self.mainFrame:Show()
         self:Rebuild()
+        self:RefreshMainFrameVisibility()
     else
-        self.mainFrame:Hide()
+        self:RefreshMainFrameVisibility()
         if self.optFrame then
             self.optFrame:Hide()
         end
@@ -78,16 +107,14 @@ function GB:Init()
             GB:CheckProfession()
             GB:UpdateBars()
         elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
-            if GB.db.hideInCombat then
-                GB.mainFrame:SetShown(event == "PLAYER_REGEN_ENABLED")
-                if event == "PLAYER_REGEN_ENABLED" then
-                    GB:Rebuild()
-                    GB:UpdateBars()
-                end
-            else
+            if GB.db.hideInCombat and event == "PLAYER_REGEN_ENABLED" then
+                GB:Rebuild()
+                GB:UpdateBars()
+            elseif not GB.db.hideInCombat then
                 GB:Rebuild()
                 GB:UpdateBars()
             end
+            GB:RefreshMainFrameVisibility()
         else
             GB:CheckProfession()
             GB:UpdateBars()
@@ -111,10 +138,12 @@ SLASH_GATHERBUFFS1, SLASH_GATHERBUFFS2 = "/gatherbuffs", "/gb"
 SlashCmdList.GATHERBUFFS = function(msg)
     msg = GB.Trim(string.lower(msg or ""))
     if msg == "" or msg == "toggle" then
-        if GB.mainFrame:IsShown() then
-            GB.mainFrame:Hide()
+        if GB.db.manuallyHidden then
+            GB:SetManualHidden(false)
+        elseif GB.mainFrame:IsShown() then
+            GB:SetManualHidden(true)
         else
-            GB.mainFrame:Show()
+            GB:SetManualHidden(false)
         end
     elseif msg == "config" or msg == "settings" or msg == "opt" then
         GB:ToggleOptions()

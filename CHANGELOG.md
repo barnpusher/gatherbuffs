@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed manual hide state so the addon stays hidden until explicitly shown again, even across combat and profession refresh events
+
 ## 0.99.2
 
 - Fixed GitHub packaging on Linux by normalizing TOC path separators in the workflow

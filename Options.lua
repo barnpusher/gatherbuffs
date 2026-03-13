@@ -419,11 +419,7 @@ function GB:BuildOptions()
             function() return GB.db.hideInCombat or false end,
             function(value)
                 GB.db.hideInCombat = value
-                if InCombatLockdown() then
-                    GB.mainFrame:SetShown(not value)
-                elseif #((GB.profOrder) or {}) > 0 then
-                    GB.mainFrame:Show()
-                end
+                GB:RefreshMainFrameVisibility()
             end)
 
         MakeBoolOptRow(gc, "Minimap icon", -48,
