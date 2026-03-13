@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.99.3
 
 - Fixed manual hide state so the addon stays hidden until explicitly shown again, even across combat and profession refresh events
 
