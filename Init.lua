@@ -1,0 +1,233 @@
+local _, GB = ...
+
+function GB:CheckProfession()
+    self.profMap, self.profOrder = GB.SnapshotProfessions()
+    self.hasFishing = GB.HasProfessionByName("Fishing")
+    self.hasProfitProfession = false
+    for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
+        if self.profMap[prof.id] and self:IsProfitProfessionTracked(prof.id) then
+            self.hasProfitProfession = true
+            break
+        end
+    end
+    if #self.profOrder > 0 or self.hasFishing then
+        self.mainFrame:Show()
+        self:Rebuild()
+    else
+        self.mainFrame:Hide()
+        if self.optFrame then
+            self.optFrame:Hide()
+        end
+    end
+end
+
+function GB:Init()
+    GatherBuffsCharDB = GatherBuffsCharDB or {}
+    GatherBuffsDB = GatherBuffsDB or {}
+    if next(GatherBuffsDB) and not GatherBuffsCharDB._migrated then
+        for k, v in pairs(GatherBuffsDB) do
+            if GatherBuffsCharDB[k] == nil then
+                GatherBuffsCharDB[k] = v
+            end
+        end
+        GatherBuffsCharDB._migrated = true
+        GatherBuffsDB = {}
+    end
+    GB.ApplyDefaults(GatherBuffsCharDB, GB.DEFAULTS)
+    self.db = GatherBuffsCharDB
+    self:MigrateDB()
+    self:LoadSessionState()
+    if not self.sessionStart or self.sessionStart == 0 then
+        self.sessionStart = time()
+        self.sessionPaused = true
+        self.sessionPausedAt = time()
+        self.sessionPausedTotal = 0
+        self:SaveSessionState()
+    end
+    self.gatherLookup = GB.BuildGatherLookup()
+    self:RefreshShardTracker()
+    self:BuildStaticUI()
+    self:BuildMinimapButton()
+    self:ApplyUiSettings()
+    self:CheckProfession()
+    self:UpdateBars()
+
+    local evf = CreateFrame("Frame")
+    evf:RegisterEvent("UNIT_AURA")
+    evf:RegisterEvent("BAG_UPDATE_DELAYED")
+    evf:RegisterEvent("CHAT_MSG_LOOT")
+    evf:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
+    evf:RegisterEvent("SKILL_LINES_CHANGED")
+    evf:RegisterEvent("PLAYER_ENTERING_WORLD")
+    evf:RegisterEvent("PLAYER_REGEN_ENABLED")
+    evf:RegisterEvent("PLAYER_REGEN_DISABLED")
+    evf:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
+        if event == "UNIT_AURA" and arg1 == "player" then
+            if InCombatLockdown() then
+                return
+            end
+            GB:UpdateBars()
+        elseif event == "CHAT_MSG_LOOT" then
+            GB:HandleLoot(arg1)
+            GB:UpdateProfit()
+        elseif event == "BAG_UPDATE_DELAYED" then
+            GB:ProcessPendingLoot()
+            GB:UpdateBars()
+        elseif event == "CURRENCY_DISPLAY_UPDATE" then
+            GB:HandleShardCurrencyUpdate(arg1, arg2, arg3)
+            GB:CheckProfession()
+            GB:UpdateBars()
+        elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
+            if GB.db.hideInCombat then
+                GB.mainFrame:SetShown(event == "PLAYER_REGEN_ENABLED")
+                if event == "PLAYER_REGEN_ENABLED" then
+                    GB:Rebuild()
+                    GB:UpdateBars()
+                end
+            else
+                GB:Rebuild()
+                GB:UpdateBars()
+            end
+        else
+            GB:CheckProfession()
+            GB:UpdateBars()
+        end
+    end)
+
+    local tick = 0
+    self.mainFrame:SetScript("OnUpdate", function(_, dt)
+        tick = tick + dt
+        if tick >= 0.5 then
+            tick = 0
+            if InCombatLockdown() then
+                return
+            end
+            GB:UpdateBars()
+        end
+    end)
+end
+
+SLASH_GATHERBUFFS1, SLASH_GATHERBUFFS2 = "/gatherbuffs", "/gb"
+SlashCmdList.GATHERBUFFS = function(msg)
+    msg = GB.Trim(string.lower(msg or ""))
+    if msg == "" or msg == "toggle" then
+        if GB.mainFrame:IsShown() then
+            GB.mainFrame:Hide()
+        else
+            GB.mainFrame:Show()
+        end
+    elseif msg == "config" or msg == "settings" or msg == "opt" then
+        GB:ToggleOptions()
+    elseif msg == "reset" then
+        GB:ResetMainPosition()
+        print("|cffaaffaaGatherBuffs|r: Position reset.")
+    elseif msg == "lootlog" then
+        GB:ToggleLootLog()
+    elseif msg == "lootdebug" then
+        GB.lootDebug = not GB.lootDebug
+        print("|cffaaffaaGatherBuffs|r: Loot debug " .. (GB.lootDebug and "|cff00ff00ON|r" or "|cffff4444OFF|r") .. " - mine/herb something to see output.")
+        if GB.lootDebug then
+            local profKeys = {}
+            for k in pairs(GB.profMap or {}) do
+                profKeys[#profKeys + 1] = k
+            end
+            print("|cffaaffaaGB:|r profMap: " .. (#profKeys > 0 and table.concat(profKeys, ", ") or "(empty - no gathering profs detected)"))
+        end
+    elseif msg == "debug" then
+        local lines = {}
+        local function L(s)
+            table.insert(lines, s or "")
+        end
+
+        L("=== Tracked categories ===")
+        for _, cat in ipairs(GATHERBUFFS_CATEGORIES) do
+            local db = GB.db.categories[cat.id]
+            if db and db.enabled then
+                local buff = GB:GetSelectedBuff(cat.id)
+                if buff then
+                    local aura = GB.GetPlayerAura(buff.spellID)
+                    L(string.format("  [%s] spellID=%-8s  %s  %s", cat.id, tostring(buff.spellID), buff.name, aura and "FOUND" or "missing"))
+                end
+            end
+        end
+
+        L("")
+        L("=== All HELPFUL auras on player ===")
+        if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
+            local i = 1
+            while true do
+                local aura = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+                if not aura then
+                    break
+                end
+                local left = ""
+                if aura.expirationTime and aura.expirationTime > 0 then
+                    left = string.format("  %.0fs left", aura.expirationTime - GetTime())
+                end
+                L(string.format("  [%d] spellId=%-8s  %s%s", i, tostring(aura.spellId), aura.name or "?", left))
+                i = i + 1
+            end
+        end
+
+        L("")
+        L("=== Weapon enchants ===")
+        local hasMH, mhExp, mhCharges, mhEnchID, hasOH, ohExp, ohCharges, ohEnchID = GetWeaponEnchantInfo()
+        if hasMH then
+            L(string.format("  MainHand: enchantID=%-8s  %.0fs left  charges=%s", tostring(mhEnchID), (mhExp or 0) / 1000, tostring(mhCharges)))
+        else
+            L("  MainHand: none")
+        end
+        if hasOH then
+            L(string.format("  OffHand:  enchantID=%-8s  %.0fs left  charges=%s", tostring(ohEnchID), (ohExp or 0) / 1000, tostring(ohCharges)))
+        end
+
+        L("")
+        L("=== Equipped profession tools & accessories ===")
+        for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
+            local info = GB.profMap and GB.profMap[prof.id]
+            if info then
+                local slots = GB.GetProfessionEquipmentSlots(info)
+                if slots and slots.tool then
+                    local toolID = GetInventoryItemID("player", slots.tool)
+                    if toolID then
+                        local name = GetItemInfo(toolID)
+                        L(string.format("  %s Tool: id=%-8d  %s", info.label, toolID, name or "?"))
+                        local enchantInfo = GB.GetProfessionToolEnchantInfo(info)
+                        if enchantInfo and enchantInfo.hasEnchant then
+                            L(string.format("  %s Tool Enchant: id=%-8d  %s", info.label, enchantInfo.enchantID, enchantInfo.enchantName or "?"))
+                        else
+                            L(string.format("  %s Tool Enchant: none", info.label))
+                        end
+                    else
+                        L(string.format("  %s Tool: none", info.label))
+                    end
+                end
+                for index, slot in ipairs((slots and slots.accessories) or {}) do
+                    local itemID = GetInventoryItemID("player", slot)
+                    if itemID then
+                        local name = GetItemInfo(itemID)
+                        L(string.format("  %s Accessory %d: id=%-8d  %s", info.label, index, itemID, name or "?"))
+                    else
+                        L(string.format("  %s Accessory %d: none", info.label, index))
+                    end
+                end
+            end
+        end
+
+        GB:ShowDebugWindow(table.concat(lines, "\n"))
+        for _, line in ipairs(lines) do
+            if line ~= "" then
+                print("|cffaaffaaGB:|r " .. line)
+            end
+        end
+    else
+        print("|cffaaffaaGatherBuffs|r: /gb [toggle|config|reset|debug|lootdebug|lootlog]")
+    end
+end
+
+local boot = CreateFrame("Frame")
+boot:RegisterEvent("PLAYER_LOGIN")
+boot:SetScript("OnEvent", function(self)
+    self:UnregisterEvent("PLAYER_LOGIN")
+    GB:Init()
+end)

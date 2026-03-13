@@ -1,0 +1,16 @@
+## Interface: 120001
+## Title: GatherBuffs
+## Notes: Tracks gathering and consumable buff timers for Midnight
+## Author: Barnpusher
+## Version: 0.99.1
+## SavedVariables: GatherBuffsDB
+## SavedVariablesPerCharacter: GatherBuffsCharDB
+
+Data.lua
+Core.lua
+Modules\Buffs.lua
+Modules\Professions.lua
+Modules\Profit.lua
+Ui.lua
+Options.lua
+Init.lua
