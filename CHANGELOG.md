@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.99.2
+
+- Fixed GitHub packaging on Linux by normalizing TOC path separators in the workflow
+- Added Midnight Skinning weekly drop tracking to the profession bar
+
 ## 0.99.1
 
 - Split the addon into module files (`Core`, `UI`, `Options`, `Init`, `Buffs`, `Professions`, `Profit`)

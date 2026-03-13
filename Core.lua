@@ -97,6 +97,10 @@ GB.PROFESSION_WEEKLY_ITEMS = {
         { itemID = 237496, questIDs = { 88673, 88674, 88675, 88676, 88677 } },
         { itemID = 237506, questIDs = { 88678 } },
     },
+    skinning = {
+        { itemID = 238625, questIDs = { 88534, 88549, 88536, 88537, 88530 } },
+        { itemID = 238626, questIDs = { 88529 } },
+    },
 }
 
 GB.PROF_ICONS = {
