@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.99.5
+
+- Published packaged addon archives to GitHub Packages via GHCR on tagged releases
+- Kept release zip assets attached to GitHub Releases for non-beta tags
+
 ## 0.99.4
 
 - Replaced the custom GitHub packaging workflow with the BigWigs WoW packager
