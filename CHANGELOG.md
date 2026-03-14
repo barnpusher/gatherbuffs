@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.99.6
+
+- Fixed GitHub artifact upload so packaged zips in `.release` are included in successful tagged runs
+
 ## 0.99.5
 
 - Published packaged addon archives to GitHub Packages via GHCR on tagged releases
