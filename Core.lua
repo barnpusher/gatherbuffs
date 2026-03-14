@@ -547,6 +547,305 @@ function GB.GetDesiredStatLabel(statID)
     return statID or "-"
 end
 
+local PROF_STAT_SCAN_PATTERNS = {
+    finesse = {
+        "([%+%-]?%d+)%s+Finesse",
+        "Finesse%s+([%+%-]?%d+)",
+    },
+    perception = {
+        "([%+%-]?%d+)%s+Perception",
+        "Perception%s+([%+%-]?%d+)",
+    },
+    deftness = {
+        "([%+%-]?%d+)%s+Deftness",
+        "Deftness%s+([%+%-]?%d+)",
+    },
+    speedPct = {
+        "([%+%-]?%d+)%%%s+Speed",
+        "Speed%s+([%+%-]?%d+)%%",
+    },
+}
+
+local PROF_INFO_STAT_KEYS = {
+    finesse = { "gatheringFinesse", "professionFinesse", "currentFinesse", "finesse" },
+    perception = { "gatheringPerception", "professionPerception", "currentPerception", "perception" },
+    deftness = { "gatheringDeftness", "professionDeftness", "currentDeftness", "deftness" },
+}
+
+local TOOLTIP_SCAN_NAME = "GatherBuffsScanTooltip"
+
+local function AddTotalsInto(target, source)
+    if not source then
+        return target
+    end
+    for _, stat in ipairs(GATHERBUFFS_STAT_ORDER) do
+        local statID = stat.id
+        target[statID] = (target[statID] or 0) + (source[statID] or 0)
+    end
+    return target
+end
+
+local function SubtractTotals(left, right)
+    local totals = GB.MakeTotals()
+    for _, stat in ipairs(GATHERBUFFS_STAT_ORDER) do
+        local statID = stat.id
+        totals[statID] = (left and left[statID] or 0) - (right and right[statID] or 0)
+    end
+    return totals
+end
+
+local function HasAnyStatValue(totals, includeSpeed)
+    if not totals then
+        return false
+    end
+    for _, stat in ipairs(GATHERBUFFS_STAT_ORDER) do
+        if includeSpeed or stat.id ~= "speedPct" then
+            if (totals[stat.id] or 0) ~= 0 then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function EnsureScanTooltip()
+    if GB.scanTooltip then
+        return GB.scanTooltip
+    end
+    local tip = CreateFrame("GameTooltip", TOOLTIP_SCAN_NAME, UIParent, "GameTooltipTemplate")
+    tip:SetOwner(UIParent, "ANCHOR_NONE")
+    GB.scanTooltip = tip
+    return tip
+end
+
+local function AccumulateTooltipStats(text, totals)
+    if type(text) ~= "string" or text == "" then
+        return
+    end
+    for statID, patterns in pairs(PROF_STAT_SCAN_PATTERNS) do
+        for _, pattern in ipairs(patterns) do
+            local value = tonumber(text:match(pattern))
+            if value then
+                totals[statID] = (totals[statID] or 0) + value
+                break
+            end
+        end
+    end
+end
+
+local function ReadTooltipLine(leftFS, rightFS, totals)
+    if leftFS and leftFS.GetText then
+        AccumulateTooltipStats(leftFS:GetText(), totals)
+    end
+    if rightFS and rightFS.GetText then
+        AccumulateTooltipStats(rightFS:GetText(), totals)
+    end
+end
+
+local function ReadTooltipDataLine(line, totals)
+    if not line then
+        return
+    end
+
+    if (not line.leftText and not line.rightText) and TooltipUtil and TooltipUtil.SurfaceArgs then
+        pcall(TooltipUtil.SurfaceArgs, line)
+    end
+
+    AccumulateTooltipStats(line.leftText, totals)
+    AccumulateTooltipStats(line.rightText, totals)
+
+    for _, child in ipairs(line.lines or {}) do
+        ReadTooltipDataLine(child, totals)
+    end
+end
+
+local function ScanEquippedItemStats(slotID)
+    local totals = GB.MakeTotals()
+    if not slotID or not GetInventoryItemLink("player", slotID) then
+        return totals
+    end
+
+    if C_TooltipInfo and C_TooltipInfo.GetInventoryItem then
+        local ok, data = pcall(C_TooltipInfo.GetInventoryItem, "player", slotID)
+        if ok and data and data.lines then
+            for _, line in ipairs(data.lines) do
+                ReadTooltipDataLine(line, totals)
+            end
+        end
+        if HasAnyStatValue(totals, true) then
+            return totals
+        end
+    end
+
+    local tip = EnsureScanTooltip()
+    tip:ClearLines()
+    tip:SetInventoryItem("player", slotID)
+
+    for i = 1, 40 do
+        local leftFS = _G[TOOLTIP_SCAN_NAME .. "TextLeft" .. i]
+        local rightFS = _G[TOOLTIP_SCAN_NAME .. "TextRight" .. i]
+        if not leftFS and not rightFS then
+            break
+        end
+        ReadTooltipLine(leftFS, rightFS, totals)
+    end
+
+    tip:Hide()
+    return totals
+end
+
+local function ExtractInfoStatValue(info, statID)
+    if type(info) ~= "table" then
+        return nil
+    end
+    for _, key in ipairs(PROF_INFO_STAT_KEYS[statID] or {}) do
+        local value = info[key]
+        if type(value) == "number" then
+            return value
+        end
+    end
+    for _, value in pairs(info) do
+        if type(value) == "table" then
+            local nested = ExtractInfoStatValue(value, statID)
+            if nested ~= nil then
+                return nested
+            end
+        end
+    end
+    return nil
+end
+
+function GB.GetActiveProfessionVariantID(infoOrProfID, profMap)
+    if not (C_TradeSkillUI and C_TradeSkillUI.GetAllProfessionTradeSkillLines and C_TradeSkillUI.GetTradeSkillDisplayName) then
+        return nil
+    end
+
+    local info = infoOrProfID
+    if type(infoOrProfID) == "string" then
+        info = profMap and profMap[infoOrProfID]
+    end
+    if not info or not info.currentSkillLineName then
+        return nil
+    end
+
+    if not GB.skillLineByDisplayName then
+        GB.skillLineByDisplayName = {}
+        for _, skillLineID in ipairs(C_TradeSkillUI.GetAllProfessionTradeSkillLines() or {}) do
+            local displayName = C_TradeSkillUI.GetTradeSkillDisplayName(skillLineID)
+            if displayName and displayName ~= "" then
+                GB.skillLineByDisplayName[displayName] = skillLineID
+            end
+        end
+    end
+
+    return GB.skillLineByDisplayName[info.currentSkillLineName]
+end
+
+function GB.GetProfessionBuffTotals(self, profID, activeOnly)
+    local totals = GB.MakeTotals()
+    for _, cat in ipairs(GATHERBUFFS_CATEGORIES) do
+        if cat.scope == "common" then
+            local db = self.db.categories[cat.id]
+            if db and db.enabled then
+                local buff, aura = self:GetRowBuff(cat.id, profID)
+                if buff and (not activeOnly or aura) then
+                    GB.AddStats(totals, buff)
+                end
+            end
+        end
+    end
+    return totals
+end
+
+function GB.GetProfessionEquipmentTotals(infoOrProfID, profMap)
+    local totals = GB.MakeTotals()
+    local slots = GB.GetProfessionEquipmentSlots(infoOrProfID, profMap)
+    if not slots then
+        return totals
+    end
+
+    if slots.tool then
+        AddTotalsInto(totals, ScanEquippedItemStats(slots.tool))
+    end
+    for _, slotID in ipairs(slots.accessories or {}) do
+        AddTotalsInto(totals, ScanEquippedItemStats(slotID))
+    end
+    return totals
+end
+
+function GB.GetProfessionApiTotals(infoOrProfID, profMap)
+    if not (C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID) then
+        return nil
+    end
+
+    local info = infoOrProfID
+    if type(infoOrProfID) == "string" then
+        info = profMap and profMap[infoOrProfID]
+    end
+    if not info then
+        return nil
+    end
+
+    local variantID = GB.GetActiveProfessionVariantID(info, profMap)
+    if not variantID then
+        return nil
+    end
+
+    local profInfo = C_TradeSkillUI.GetProfessionInfoBySkillLineID(variantID)
+    if not profInfo then
+        return nil
+    end
+
+    local totals = GB.MakeTotals()
+    for _, stat in ipairs(GATHERBUFFS_STAT_ORDER) do
+        if stat.id ~= "speedPct" then
+            local value = ExtractInfoStatValue(profInfo, stat.id)
+            if type(value) == "number" then
+                totals[stat.id] = value
+            end
+        end
+    end
+
+    if HasAnyStatValue(totals, false) then
+        return totals
+    end
+    return nil
+end
+
+function GB:GetProfessionStatSnapshot(profID)
+    local info = self.profMap and self.profMap[profID]
+    if not info then
+        return nil
+    end
+
+    local activeBuffs = GB.GetProfessionBuffTotals(self, profID, true)
+    local maxBuffs = GB.GetProfessionBuffTotals(self, profID, false)
+    local liveTotals = GB.GetProfessionApiTotals(info, self.profMap)
+    local current = GB.MakeTotals()
+    local max = GB.MakeTotals()
+
+    if liveTotals then
+        AddTotalsInto(current, liveTotals)
+        AddTotalsInto(max, liveTotals)
+        AddTotalsInto(max, SubtractTotals(maxBuffs, activeBuffs))
+    else
+        local baseline = GB.GetProfessionEquipmentTotals(info, self.profMap)
+        AddTotalsInto(current, baseline)
+        AddTotalsInto(max, baseline)
+        AddTotalsInto(current, activeBuffs)
+        AddTotalsInto(max, maxBuffs)
+    end
+
+    current.speedPct = activeBuffs.speedPct or 0
+    max.speedPct = maxBuffs.speedPct or 0
+
+    return {
+        current = current,
+        max = max,
+        hasLiveTotals = liveTotals ~= nil,
+    }
+end
+
 function GB.FloorToGoldSilver(copper)
     copper = math.max(0, math.floor(copper or 0))
     return copper - (copper % 100)
@@ -557,7 +856,7 @@ function GB.SnapshotProfessions()
     local primary1, primary2, archaeology, fishing, cooking = GetProfessions()
     for _, idx in ipairs({ primary1, primary2, archaeology, fishing, cooking }) do
         if idx then
-            local name, icon, skill, maxSkill, _, _, _, bonus = GetProfessionInfo(idx)
+            local name, icon, skill, maxSkill, _, _, skillLineID, bonus, _, _, currentSkillLineName = GetProfessionInfo(idx)
             if name then
                 for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
                     if name:find(prof.find, 1, true) and not map[prof.id] then
@@ -568,6 +867,9 @@ function GB.SnapshotProfessions()
                             skill = skill or 0,
                             maxSkill = maxSkill or 0,
                             bonus = bonus or 0,
+                            skillLineID = skillLineID,
+                            currentSkillLineName = currentSkillLineName,
+                            professionIndex = idx,
                         }
                         info.total = info.skill + info.bonus
                         if idx == primary1 then

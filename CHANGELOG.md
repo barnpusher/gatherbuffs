@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.99.7
+
+- Moved profession stat summaries out of the profession cards and into the main buffs panel
+- Added `Fin / Per / Def / Speed` summary rows for mining, herbalism, skinning, and fishing
+- Added profession stat scanning from equipped tool and accessory tooltips as the basis for current/max stat totals
+
 ## 0.99.6
 
 - Fixed GitHub artifact upload so packaged zips in `.release` are included in successful tagged runs

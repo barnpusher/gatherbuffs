@@ -427,6 +427,13 @@ function GB:BuildStaticUI()
             self.commonRows[cat.id]:Hide()
         end
     end
+    self.commonStatRows = {}
+    for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
+        local row = MakeInfoRow(self.commonPanel.content)
+        row.lbl:SetText(prof.label)
+        row:Hide()
+        self.commonStatRows[prof.id] = row
+    end
     self.shardRow = MakeRow(self.commonPanel.content, { id = "shard_of_dundun", label = "Shard" })
     self.shardRow.cnt:Hide()
     self.shardRow:Hide()
@@ -460,7 +467,7 @@ function GB:BuildStaticUI()
         card.buffs:SetWidth(W - PAD * 4)
         card.buffs:SetJustifyH("LEFT")
         card.nodes = card.content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        card.nodes:SetPoint("TOPLEFT", PAD, -55)
+        card.nodes:SetPoint("TOPLEFT", PAD, -38)
         card.nodes:SetWidth(W - PAD * 4)
         card.nodes:SetJustifyH("LEFT")
         card.nodes:SetTextColor(0.62, 0.68, 0.74)
@@ -523,6 +530,25 @@ function GB:BuildStaticUI()
     self.profitRows = {}
     self.profitVisibleRowCount = 0
     self:EnsureProfitRows(0)
+end
+
+local function FormatProfessionStatSummary(snapshot)
+    if not snapshot then
+        return "-"
+    end
+    local cur = snapshot.current or GB.MakeTotals()
+    local max = snapshot.max or GB.MakeTotals()
+    return string.format(
+        "Fin: %d/%d   Per: %d/%d   Def: %d/%d   Speed: %s/%s",
+        cur.finesse or 0,
+        max.finesse or 0,
+        cur.perception or 0,
+        max.perception or 0,
+        cur.deftness or 0,
+        max.deftness or 0,
+        GB.FormatStat("speedPct", cur.speedPct or 0),
+        GB.FormatStat("speedPct", max.speedPct or 0)
+    )
 end
 
 local function ApplyRow(row, buff, aura)
@@ -698,6 +724,21 @@ function GB:Rebuild()
             end
         end
     end
+    for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
+        local row = self.commonStatRows and self.commonStatRows[prof.id]
+        local info = self.profMap and self.profMap[prof.id]
+        if row then
+            if info and self:IsProfessionModuleEnabled(prof.id) and self.db.modules.globalExpanded then
+                row:ClearAllPoints()
+                row:SetPoint("TOPLEFT", self.commonPanel.content, "TOPLEFT", PAD, -(commonStart + n * (ROW_H + 3)))
+                row:SetWidth(W - PAD * 4)
+                row:SetShown(true)
+                n = n + 1
+            else
+                row:Hide()
+            end
+        end
+    end
     if self.shardRow then
         self.shardRow:Hide()
     end
@@ -740,7 +781,7 @@ function GB:Rebuild()
             card:SetPoint("TOPLEFT", self.mainTree, "TOPLEFT", PAD, -y)
             self:SetPanelExpanded(card, expanded)
 
-            local rowY = isFishing and 39 or (showNodes and 72 or 56)
+            local rowY = isFishing and 39 or (showNodes and 55 or 39)
             local overloadCatID = "overload_" .. prof.id
             local overloadEnabled = card.overload and self.db.categories[overloadCatID] and self.db.categories[overloadCatID].enabled
             local wsEnabled = card.weaponstone and self.db.categories.weaponstone and self.db.categories.weaponstone.enabled
@@ -794,7 +835,7 @@ function GB:Rebuild()
             end
             card.skill:SetShown(expanded)
             card.total:SetShown(expanded)
-            card.buffs:SetShown(expanded and not isFishing)
+            card.buffs:SetShown(false)
             card:Show()
             y = y + card:GetHeight() + 6
         else
@@ -840,31 +881,32 @@ function GB:UpdateBars()
     if not inCombat and self.currencyShardRow and self.db.modules.currenciesExpanded and shardEnabled then
         ApplyCurrencyRow(self.currencyShardRow, shardInfo)
     end
-    local cur, max = nil, nil
-    if not inCombat then
-        cur, max = self:GetCommonTotals(true), self:GetCommonTotals(false)
+    for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
+        local row = self.commonStatRows and self.commonStatRows[prof.id]
+        local info = self.profMap and self.profMap[prof.id]
+        if row and info and self:IsProfessionModuleEnabled(prof.id) then
+            local snapshot = inCombat and nil or self:GetProfessionStatSnapshot(prof.id)
+            row.lbl:SetText(info.label)
+            row.val:SetText(FormatProfessionStatSummary(snapshot))
+            row.val:SetTextColor(0.90, 0.90, 0.90)
+        end
     end
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
         local card, info = self.profCards and self.profCards[prof.id], self.profMap and self.profMap[prof.id]
         if card and info then
-            local desired = self:GetDesiredStat(prof.id)
             local isFishing = prof.id == "fishing"
             card.title:SetText(info.label)
             local weeklyItemsText = GB.GetProfessionWeeklyItemText(prof.id)
             if isFishing then
                 card.summary:SetText(string.format("%d/%d", info.skill, info.maxSkill))
             elseif weeklyItemsText and weeklyItemsText ~= "" then
-                card.summary:SetText(string.format("%s   %d/%d  %s", weeklyItemsText, info.skill, info.maxSkill, GB.GetDesiredStatLabel(desired)))
+                card.summary:SetText(string.format("%s   %d/%d", weeklyItemsText, info.skill, info.maxSkill))
             else
-                card.summary:SetText(string.format("%d/%d  %s", info.skill, info.maxSkill, GB.GetDesiredStatLabel(desired)))
+                card.summary:SetText(string.format("%d/%d", info.skill, info.maxSkill))
             end
             card.skill:SetText(string.format("Raw skill: %d / %d", info.skill, info.maxSkill))
             card.total:SetText(string.format("Current total: %d (%+d equipped bonus)", info.total, info.bonus))
-            if isFishing then
-                card.buffs:SetText("")
-            elseif not inCombat and cur and max then
-                card.buffs:SetText(string.format("Desired: %s   Buffs F %d/%d  P %d/%d  D %d/%d", GB.GetDesiredStatLabel(desired), cur.finesse, max.finesse, cur.perception, max.perception, cur.deftness, max.deftness))
-            end
+            card.buffs:SetText("")
             local nodeText = GB.GetNodeSkillSummary(prof.id)
             if nodeText and nodeText ~= "" then
                 card.nodes:SetText(nodeText)
