@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.99.8
+
+- Moved profession stat summaries into the profession cards and kept the global buff section limited to shared buffs
+- Added Tailoring as a profit-only module with dedicated settings and Midnight cloth tracking
+- Switched profit display and reporting to current bag inventory minus session-start baseline
+- Added readable profit report export buttons for party chat and local console output
+
 ## 0.99.7
 
 - Moved profession stat summaries out of the profession cards and into the main buffs panel

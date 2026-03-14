@@ -427,13 +427,6 @@ function GB:BuildStaticUI()
             self.commonRows[cat.id]:Hide()
         end
     end
-    self.commonStatRows = {}
-    for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        local row = MakeInfoRow(self.commonPanel.content)
-        row.lbl:SetText(prof.label)
-        row:Hide()
-        self.commonStatRows[prof.id] = row
-    end
     self.shardRow = MakeRow(self.commonPanel.content, { id = "shard_of_dundun", label = "Shard" })
     self.shardRow.cnt:Hide()
     self.shardRow:Hide()
@@ -448,40 +441,42 @@ function GB:BuildStaticUI()
 
     self.profCards = {}
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        local card = MakePanel(self.mainTree, prof.label)
-        card.profID = prof.id
-        self:ConfigurePanel(card, self:IsProfessionExpanded(prof.id), function()
-            GB:SetProfessionExpanded(prof.id, not GB:IsProfessionExpanded(prof.id))
-            GB:Rebuild()
-        end)
-        card.skill = card.content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        card.skill:SetPoint("TOPLEFT", PAD, -4)
-        card.skill:SetWidth(W - PAD * 4)
-        card.skill:SetJustifyH("LEFT")
-        card.total = card.content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        card.total:SetPoint("TOPLEFT", PAD, -21)
-        card.total:SetWidth(W - PAD * 4)
-        card.total:SetJustifyH("LEFT")
-        card.buffs = card.content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        card.buffs:SetPoint("TOPLEFT", PAD, -38)
-        card.buffs:SetWidth(W - PAD * 4)
-        card.buffs:SetJustifyH("LEFT")
-        card.nodes = card.content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        card.nodes:SetPoint("TOPLEFT", PAD, -38)
-        card.nodes:SetWidth(W - PAD * 4)
-        card.nodes:SetJustifyH("LEFT")
-        card.nodes:SetTextColor(0.62, 0.68, 0.74)
-        local overloadCatDef = GB.GetCatDef("overload_" .. prof.id)
-        card.overload = overloadCatDef and MakeRow(card.content, overloadCatDef) or nil
-        if prof.id == "mining" then
-            card.weaponstone = MakeRow(card.content, GB.GetCatDef("weaponstone"), prof.id)
-            card.tool = MakeInfoRow(card.content)
-            card.tool.lbl:SetText("Tool")
-            card.enchant = MakeInfoRow(card.content)
-            card.enchant.lbl:SetText("Enchant")
+        if not prof.profitOnly then
+            local card = MakePanel(self.mainTree, prof.label)
+            card.profID = prof.id
+            self:ConfigurePanel(card, self:IsProfessionExpanded(prof.id), function()
+                GB:SetProfessionExpanded(prof.id, not GB:IsProfessionExpanded(prof.id))
+                GB:Rebuild()
+            end)
+            card.skill = card.content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            card.skill:SetPoint("TOPLEFT", PAD, -4)
+            card.skill:SetWidth(W - PAD * 4)
+            card.skill:SetJustifyH("LEFT")
+            card.total = card.content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            card.total:SetPoint("TOPLEFT", PAD, -21)
+            card.total:SetWidth(W - PAD * 4)
+            card.total:SetJustifyH("LEFT")
+            card.buffs = card.content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            card.buffs:SetPoint("TOPLEFT", PAD, -38)
+            card.buffs:SetWidth(W - PAD * 4)
+            card.buffs:SetJustifyH("LEFT")
+            card.nodes = card.content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            card.nodes:SetPoint("TOPLEFT", PAD, -55)
+            card.nodes:SetWidth(W - PAD * 4)
+            card.nodes:SetJustifyH("LEFT")
+            card.nodes:SetTextColor(0.62, 0.68, 0.74)
+            local overloadCatDef = GB.GetCatDef("overload_" .. prof.id)
+            card.overload = overloadCatDef and MakeRow(card.content, overloadCatDef) or nil
+            if prof.id == "mining" then
+                card.weaponstone = MakeRow(card.content, GB.GetCatDef("weaponstone"), prof.id)
+                card.tool = MakeInfoRow(card.content)
+                card.tool.lbl:SetText("Tool")
+                card.enchant = MakeInfoRow(card.content)
+                card.enchant.lbl:SetText("Enchant")
+            end
+            card:Hide()
+            self.profCards[prof.id] = card
         end
-        card:Hide()
-        self.profCards[prof.id] = card
     end
 
     self.profitPanel = MakePanel(self.mainTree, "Profit")
@@ -491,7 +486,7 @@ function GB:BuildStaticUI()
     end)
     self.profitMeta = self.profitPanel.content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.profitMeta:SetPoint("TOPLEFT", PAD, -9)
-    self.profitMeta:SetWidth(W - PAD * 2 - 130)
+    self.profitMeta:SetWidth(W - PAD * 2 - 250)
     self.profitMeta:SetJustifyH("LEFT")
     self.profitMeta:SetTextColor(0.68, 0.70, 0.74)
     self.profitResetBtn = CreateFrame("Button", nil, self.profitPanel.content, "BackdropTemplate")
@@ -527,6 +522,40 @@ function GB:BuildStaticUI()
     self.profitPauseTxt:SetText("Pause")
     self.profitPauseTxt:SetTextColor(0.70, 0.92, 0.70)
     self.profitPauseBtn:SetScript("OnClick", function() GB:TogglePause() end)
+
+    self.profitPartyBtn = CreateFrame("Button", nil, self.profitPanel.content, "BackdropTemplate")
+    self.profitPartyBtn:SetPoint("TOPRIGHT", self.profitPauseBtn, "TOPLEFT", -4, 0)
+    self.profitPartyBtn:SetSize(52, 18)
+    self.profitPartyBtn:SetBackdrop({
+        bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+        edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+        tile = true, tileSize = 8, edgeSize = 6,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    self.profitPartyBtn:SetBackdropColor(0.10, 0.14, 0.22, 0.92)
+    self.profitPartyBtn:SetBackdropBorderColor(0.24, 0.38, 0.62)
+    local partyText = self.profitPartyBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    partyText:SetAllPoints()
+    partyText:SetText("Report")
+    partyText:SetTextColor(0.72, 0.82, 0.96)
+    self.profitPartyBtn:SetScript("OnClick", function() GB:SendProfitReportToChat() end)
+
+    self.profitConsoleBtn = CreateFrame("Button", nil, self.profitPanel.content, "BackdropTemplate")
+    self.profitConsoleBtn:SetPoint("TOPRIGHT", self.profitPartyBtn, "TOPLEFT", -4, 0)
+    self.profitConsoleBtn:SetSize(56, 18)
+    self.profitConsoleBtn:SetBackdrop({
+        bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+        edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+        tile = true, tileSize = 8, edgeSize = 6,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    self.profitConsoleBtn:SetBackdropColor(0.16, 0.12, 0.22, 0.92)
+    self.profitConsoleBtn:SetBackdropBorderColor(0.42, 0.30, 0.62)
+    local consoleText = self.profitConsoleBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    consoleText:SetAllPoints()
+    consoleText:SetText("Console")
+    consoleText:SetTextColor(0.84, 0.78, 0.96)
+    self.profitConsoleBtn:SetScript("OnClick", function() GB:PrintProfitReportToConsole() end)
     self.profitRows = {}
     self.profitVisibleRowCount = 0
     self:EnsureProfitRows(0)
@@ -688,7 +717,7 @@ function GB:Rebuild()
     self.profMap, self.profOrder = GB.SnapshotProfessions()
     self.hasProfitProfession = false
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        if self.profMap[prof.id] and self:IsProfitProfessionTracked(prof.id) then
+        if self.profMap[prof.id] and self:IsProfessionModuleEnabled(prof.id) and self:IsProfitProfessionTracked(prof.id) then
             self.hasProfitProfession = true
             break
         end
@@ -718,21 +747,6 @@ function GB:Rebuild()
                 row:SetHeight(ROW_H)
                 row:SetShown(self.db.modules.globalExpanded)
                 table.insert(activeCommon, row)
-                n = n + 1
-            else
-                row:Hide()
-            end
-        end
-    end
-    for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        local row = self.commonStatRows and self.commonStatRows[prof.id]
-        local info = self.profMap and self.profMap[prof.id]
-        if row then
-            if info and self:IsProfessionModuleEnabled(prof.id) and self.db.modules.globalExpanded then
-                row:ClearAllPoints()
-                row:SetPoint("TOPLEFT", self.commonPanel.content, "TOPLEFT", PAD, -(commonStart + n * (ROW_H + 3)))
-                row:SetWidth(W - PAD * 4)
-                row:SetShown(true)
                 n = n + 1
             else
                 row:Hide()
@@ -773,7 +787,7 @@ function GB:Rebuild()
 
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
         local card, info = self.profCards[prof.id], self.profMap[prof.id]
-        if info and self:IsProfessionModuleEnabled(prof.id) then
+        if card and info and self:IsProfessionModuleEnabled(prof.id) then
             local nodeText = GB.GetNodeSkillSummary(prof.id)
             local showNodes = nodeText and nodeText ~= ""
             local expanded = self:IsProfessionExpanded(prof.id)
@@ -781,7 +795,7 @@ function GB:Rebuild()
             card:SetPoint("TOPLEFT", self.mainTree, "TOPLEFT", PAD, -y)
             self:SetPanelExpanded(card, expanded)
 
-            local rowY = isFishing and 39 or (showNodes and 55 or 39)
+            local rowY = isFishing and 56 or (showNodes and 72 or 56)
             local overloadCatID = "overload_" .. prof.id
             local overloadEnabled = card.overload and self.db.categories[overloadCatID] and self.db.categories[overloadCatID].enabled
             local wsEnabled = card.weaponstone and self.db.categories.weaponstone and self.db.categories.weaponstone.enabled
@@ -835,11 +849,13 @@ function GB:Rebuild()
             end
             card.skill:SetShown(expanded)
             card.total:SetShown(expanded)
-            card.buffs:SetShown(false)
+            card.buffs:SetShown(expanded)
             card:Show()
             y = y + card:GetHeight() + 6
         else
-            card:Hide()
+            if card then
+                card:Hide()
+            end
         end
     end
 
@@ -882,16 +898,6 @@ function GB:UpdateBars()
         ApplyCurrencyRow(self.currencyShardRow, shardInfo)
     end
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        local row = self.commonStatRows and self.commonStatRows[prof.id]
-        local info = self.profMap and self.profMap[prof.id]
-        if row and info and self:IsProfessionModuleEnabled(prof.id) then
-            local snapshot = inCombat and nil or self:GetProfessionStatSnapshot(prof.id)
-            row.lbl:SetText(info.label)
-            row.val:SetText(FormatProfessionStatSummary(snapshot))
-            row.val:SetTextColor(0.90, 0.90, 0.90)
-        end
-    end
-    for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
         local card, info = self.profCards and self.profCards[prof.id], self.profMap and self.profMap[prof.id]
         if card and info then
             local isFishing = prof.id == "fishing"
@@ -906,7 +912,7 @@ function GB:UpdateBars()
             end
             card.skill:SetText(string.format("Raw skill: %d / %d", info.skill, info.maxSkill))
             card.total:SetText(string.format("Current total: %d (%+d equipped bonus)", info.total, info.bonus))
-            card.buffs:SetText("")
+            card.buffs:SetText(FormatProfessionStatSummary(inCombat and nil or self:GetProfessionStatSnapshot(prof.id)))
             local nodeText = GB.GetNodeSkillSummary(prof.id)
             if nodeText and nodeText ~= "" then
                 card.nodes:SetText(nodeText)

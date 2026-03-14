@@ -78,6 +78,11 @@ GATHERBUFFS_GATHER_ITEMS = {
         { name = "Ominous Octopus",   ids = { 238373 } },
         { name = "Warping Wise",      ids = { 238379 } },
     },
+    tailoring = {
+        { name = "Bright Linen",  ids = { 236963, 236965 } },
+        { name = "Sunfire Silk",  ids = { 237015, 237016 } },
+        { name = "Arcanoweave",   ids = { 237018, 237017 } },
+    },
 }
 
 -- Ordering for displayed stats.  Entries map an identifier to a short label.
@@ -94,6 +99,7 @@ GATHERBUFFS_PROFESSIONS = {
     { id = "herbalism", label = "Herbalism", find = "Herbalism" },
     { id = "skinning",  label = "Skinning",  find = "Skinning"  },
     { id = "fishing",   label = "Fishing",   find = "Fishing"   },
+    { id = "tailoring", label = "Tailoring", find = "Tailoring", profitOnly = true },
 }
 
 -- Category definitions.  Each category contains one or more buffs.  The

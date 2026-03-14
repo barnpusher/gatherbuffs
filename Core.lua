@@ -38,6 +38,7 @@ GB.DEFAULTS = {
             herbalism = true,
             skinning = true,
             fishing = true,
+            tailoring = true,
         },
         mainCollapsed = false,
         professions = {
@@ -45,6 +46,7 @@ GB.DEFAULTS = {
             herbalism = { enabled = true, expanded = true, desiredStat = "perception" },
             skinning = { enabled = true, expanded = true, desiredStat = "finesse" },
             fishing = { enabled = true, expanded = true },
+            tailoring = { enabled = true, expanded = true },
         },
     },
     session = {

@@ -30,7 +30,7 @@ end
 function GB:GetTrackedProfitProfessionMap()
     local tracked = {}
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        if self.profMap and self.profMap[prof.id] and self:IsProfitProfessionTracked(prof.id) then
+        if self.profMap and self.profMap[prof.id] and self:IsProfessionModuleEnabled(prof.id) and self:IsProfitProfessionTracked(prof.id) then
             tracked[prof.id] = true
         end
     end

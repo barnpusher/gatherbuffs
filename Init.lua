@@ -74,6 +74,7 @@ function GB:Init()
         self:SaveSessionState()
     end
     self.gatherLookup = GB.BuildGatherLookup()
+    self:EnsureInventoryBaseline()
     self:RefreshShardTracker()
     self:BuildStaticUI()
     self:BuildMinimapButton()

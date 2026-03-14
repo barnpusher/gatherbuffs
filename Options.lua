@@ -166,7 +166,7 @@ local function MakeProfOptRow(parent, prof, yTop)
     lbl:SetJustifyH("LEFT")
     lbl:SetText(prof.label .. ":")
 
-    if prof.id == "fishing" then
+    if prof.id == "fishing" or prof.profitOnly then
         return row
     end
 
@@ -533,6 +533,17 @@ function GB:BuildOptions()
         if td.prof then
             local pc = contentFrames[td.id]
             MakeProfOptRow(pc, td.prof, 0)
+            if td.prof.profitOnly then
+                MakeBoolOptRow(pc, "Track Midnight cloth profit", -28,
+                    function()
+                        return GB:IsProfitProfessionTracked(td.prof.id)
+                    end,
+                    function(value)
+                        GB.db.modules.profitTracking[td.prof.id] = value and true or false
+                        GB:CheckProfession()
+                        GB:UpdateProfit()
+                    end)
+            end
             local catList = profCatMap[td.prof.id] or {}
             for i, catID in ipairs(catList) do
                 local cat = GB.GetCatDef(catID)

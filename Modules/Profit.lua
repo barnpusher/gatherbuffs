@@ -23,8 +23,17 @@ function GB:LoadSessionState()
     self.sessionPaused = session.paused ~= false
     self.sessionPausedAt = session.pausedAt or 0
     self.sessionPausedTotal = session.pausedTotal or 0
+    self.sessionBaselineInitialized = session.inventoryBaselineInitialized == true
+    self.sessionBaseline = {}
     self.sessionLoot = {}
     self.sessionOrder = {}
+
+    for itemID, count in pairs(session.inventoryBaseline or {}) do
+        local normalizedID = tonumber(itemID)
+        if normalizedID and count and count > 0 then
+            self.sessionBaseline[normalizedID] = count
+        end
+    end
 
     for _, itemID in ipairs(session.order or {}) do
         local key = tostring(itemID)
@@ -50,9 +59,17 @@ function GB:SaveSessionState()
         paused = self.sessionPaused or false,
         pausedAt = self.sessionPausedAt or 0,
         pausedTotal = self.sessionPausedTotal or 0,
+        inventoryBaselineInitialized = self.sessionBaselineInitialized == true,
+        inventoryBaseline = {},
         loot = {},
         order = {},
     }
+
+    for itemID, count in pairs(self.sessionBaseline or {}) do
+        if count and count > 0 then
+            session.inventoryBaseline[tostring(itemID)] = count
+        end
+    end
 
     for _, itemID in ipairs(self.sessionOrder or {}) do
         local item = self.sessionLoot and self.sessionLoot[itemID]
@@ -92,11 +109,16 @@ function GB:ResetSession()
     self.sessionPaused = true
     self.sessionPausedAt = time()
     self.sessionPausedTotal = 0
+    self.sessionBaselineInitialized = false
+    self.sessionBaseline = {}
     self.sessionLoot = {}
     self.sessionOrder = {}
     self.lastGphValue = 0
     self.lastGphUpdateTime = nil
     self.gphDirty = true
+    if self.gatherLookup then
+        self:CaptureInventoryBaseline()
+    end
     self:SaveSessionState()
     if self.profitPanel then
         self:UpdateProfit()
@@ -266,6 +288,155 @@ function GB:TrackLoot(itemID, amount, link)
     self:SaveSessionState()
 end
 
+function GB:GetBagItemCount(itemID)
+    local count = GetItemCount(itemID, false, false, false, false)
+    return math.max(0, tonumber(count) or 0)
+end
+
+function GB:CaptureInventoryBaseline()
+    local baseline = {}
+    for itemID in pairs(self.gatherLookup or {}) do
+        local count = self:GetBagItemCount(itemID)
+        if count > 0 then
+            baseline[itemID] = count
+        end
+    end
+    self.sessionBaseline = baseline
+    self.sessionBaselineInitialized = true
+    self.gphDirty = true
+end
+
+function GB:EnsureInventoryBaseline()
+    if self.sessionBaselineInitialized then
+        return
+    end
+    self:CaptureInventoryBaseline()
+    self:SaveSessionState()
+end
+
+local function GetSummaryChatChannel()
+    if IsInGroup and IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
+        return "INSTANCE_CHAT"
+    end
+    if IsInRaid and IsInRaid() then
+        return "RAID"
+    end
+    if IsInGroup and IsInGroup() then
+        return "PARTY"
+    end
+    return nil
+end
+
+local function EscapeChatMessage(message)
+    return tostring(message or ""):gsub("|", "||")
+end
+
+function GB:BuildCurrentProfitGroups()
+    local totalValue = 0
+    local grouped = {}
+    local groupOrder = {}
+    local groupDisplay = {}
+    local trackedProfMap = self:GetTrackedProfitProfessionMap()
+
+    self:EnsureInventoryBaseline()
+
+    for itemID, lookupInfo in pairs(self.gatherLookup or {}) do
+        if GB.IsGatheringMat(itemID, trackedProfMap, self.gatherLookup) then
+            local count = self:GetBagItemCount(itemID) - ((self.sessionBaseline and self.sessionBaseline[itemID]) or 0)
+            if count > 0 then
+                local item = {
+                    itemID = itemID,
+                    count = count,
+                    price = self:GetPrice(itemID),
+                }
+                local groupKey = lookupInfo and lookupInfo.name or ("__id_" .. itemID)
+                if not grouped[groupKey] then
+                    grouped[groupKey] = {}
+                    groupOrder[#groupOrder + 1] = groupKey
+                    groupDisplay[groupKey] = lookupInfo and lookupInfo.name
+                        or GetItemInfo(itemID)
+                        or ("item:" .. itemID)
+                end
+                grouped[groupKey][#grouped[groupKey] + 1] = item
+                totalValue = totalValue + ((item.price or 0) * count)
+            end
+        end
+    end
+
+    table.sort(groupOrder, function(a, b)
+        return (groupDisplay[a] or a) < (groupDisplay[b] or b)
+    end)
+
+    return grouped, groupOrder, groupDisplay, totalValue
+end
+
+function GB:BuildProfitReportLines()
+    local lines = {}
+    local elapsed = self:GetActiveElapsed()
+    local grouped, groupOrder, groupDisplay, totalValue = self:BuildCurrentProfitGroups()
+
+    local gphValue = 0
+    if totalValue > 0 and elapsed > 0 then
+        gphValue = math.floor((totalValue * 3600) / math.max(elapsed, MIN_GPH_ELAPSED))
+    end
+    lines[#lines + 1] = string.format("Session total: %s", GB.FormatGoldPlain(totalValue))
+    lines[#lines + 1] = string.format("Per hour: %s", GB.FormatGoldPlain(gphValue))
+
+    for _, groupKey in ipairs(groupOrder) do
+        local variants = grouped[groupKey]
+        table.sort(variants, function(a, b)
+            local la = self.gatherLookup and self.gatherLookup[a.itemID]
+            local lb = self.gatherLookup and self.gatherLookup[b.itemID]
+            return (la and la.tier or 0) < (lb and lb.tier or 0)
+        end)
+
+        local label = groupDisplay[groupKey] or groupKey
+        for _, item in ipairs(variants) do
+            local lookup = self.gatherLookup and self.gatherLookup[item.itemID]
+            local multiQ = lookup and (lookup.totalTiers or 1) > 1
+            local suffix = multiQ and (" Q" .. (lookup.tier or 1)) or ""
+            local unitPrice = item and item.price and GB.FormatGoldPlain(item.price) or "?"
+            local count = item and item.count or 0
+            local lineValue = (item and item.price or 0) * count
+            lines[#lines + 1] = string.format(
+                "%s%s: %d @ %s - %s",
+                label,
+                suffix,
+                count,
+                unitPrice,
+                GB.FormatGoldPlain(lineValue)
+            )
+        end
+    end
+
+    if #groupOrder == 0 then
+        lines[#lines + 1] = "No tracked session items"
+    end
+
+    return lines
+end
+
+function GB:SendProfitReportToChat()
+    local channel = GetSummaryChatChannel()
+    if not channel then
+        print("|cffaaffaaGatherBuffs:|r join a party/raid to export the report.")
+        return
+    end
+
+    local lines = self:BuildProfitReportLines()
+    for _, line in ipairs(lines) do
+        SendChatMessage(EscapeChatMessage(line), channel)
+    end
+end
+
+function GB:PrintProfitReportToConsole()
+    local lines = self:BuildProfitReportLines()
+    print("|cffaaffaaGatherBuffs report:|r")
+    for _, line in ipairs(lines) do
+        print(line)
+    end
+end
+
 function GB:RefreshSessionPrices()
     for _, itemID in ipairs(self.sessionOrder) do
         local item = self.sessionLoot[itemID]
@@ -312,28 +483,9 @@ function GB:EnsureProfitRows(count)
 end
 
 function GB:UpdateProfit()
-    self:RefreshSessionPrices()
     local totalValue, rows = 0, {}
-
-    local byGroup, groupOrder, groupDisplay = {}, {}, {}
-    for _, itemID in ipairs(self.sessionOrder) do
-        local item = self.sessionLoot[itemID]
-        if item then
-            local itemName = GetItemInfo(itemID)
-            local lookupInfo = self.gatherLookup and self.gatherLookup[itemID]
-            local groupKey = lookupInfo and lookupInfo.name or ("__id_" .. itemID)
-            local displayName = lookupInfo and lookupInfo.name
-                or itemName
-                or (item.link or ""):match("%[(.-)%]")
-                or ("item:" .. itemID)
-            if not byGroup[groupKey] then
-                byGroup[groupKey] = {}
-                table.insert(groupOrder, groupKey)
-                groupDisplay[groupKey] = displayName
-            end
-            table.insert(byGroup[groupKey], item)
-        end
-    end
+    local byGroup, groupOrder, groupDisplay, groupedTotalValue = self:BuildCurrentProfitGroups()
+    totalValue = groupedTotalValue or 0
 
     for _, groupKey in ipairs(groupOrder) do
         local variants = byGroup[groupKey]
@@ -355,7 +507,6 @@ function GB:UpdateProfit()
         for _, item in ipairs(variants) do
             local value = (item.price or 0) * item.count
             lineValue = lineValue + value
-            totalValue = totalValue + value
             totalCount = totalCount + item.count
         end
 
@@ -811,12 +962,11 @@ end
 
 function GB.IsGatheringMat(itemID, profMap, gatherLookup)
     local info = gatherLookup and gatherLookup[itemID]
-    if not info then
-        return false
-    end
-    for prof in pairs(info.profs) do
-        if profMap and profMap[prof] then
-            return true
+    if info then
+        for prof in pairs(info.profs) do
+            if profMap and profMap[prof] then
+                return true
+            end
         end
     end
     return false
