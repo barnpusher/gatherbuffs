@@ -25,8 +25,6 @@ jobs:
 
       - name: Package addon
         uses: BigWigsMods/packager@v2
-        env:
-          GITHUB_OAUTH: ${{ startsWith(github.ref, 'refs/tags/') && secrets.GITHUB_TOKEN || '' }}
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
@@ -34,3 +32,9 @@ jobs:
           name: package-${{ github.ref_name }}
           path: .release/*.zip
           if-no-files-found: error
+
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, 'beta')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: .release/*.zip
