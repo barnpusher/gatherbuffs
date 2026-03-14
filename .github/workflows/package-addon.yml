@@ -11,7 +11,6 @@ env:
 
 permissions:
   contents: write
-  packages: write
 
 jobs:
   package:
@@ -26,54 +25,6 @@ jobs:
 
       - name: Package addon
         uses: BigWigsMods/packager@v2
-
-      - name: Install ORAS
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -sSL https://github.com/oras-project/oras/releases/download/v1.3.0/oras_1.3.0_linux_amd64.tar.gz -o oras.tar.gz
-          tar -xzf oras.tar.gz oras
-          sudo install oras /usr/local/bin/oras
-          oras version
-
-      - name: Log in to GitHub Container Registry
-        if: startsWith(github.ref, 'refs/tags/')
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-      - name: Publish package to GitHub Packages
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          owner="${GITHUB_REPOSITORY_OWNER,,}"
-          repo="${GITHUB_REPOSITORY#*/}"
-          repo="${repo,,}"
-          version="${GITHUB_REF_NAME//\//-}"
-          source_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
-          package="ghcr.io/${owner}/${repo}"
-
-          shopt -s nullglob
-          files=(.release/*.zip)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No packaged zip files found in .release"
-            exit 1
-          fi
-
-          upload_args=()
-          for file in "${files[@]}"; do
-            echo "Including $file in $package:$version"
-            upload_args+=("${file}:application/zip")
-          done
-
-            oras push "$package:$version" \
-              --artifact-type application/zip \
-              --annotation "org.opencontainers.image.title=${repo}-${version}" \
-              --annotation "org.opencontainers.image.version=${GITHUB_REF_NAME}" \
-              --annotation "org.opencontainers.image.revision=${GITHUB_SHA}" \
-              --annotation "org.opencontainers.image.source=${source_url}" \
-              "${upload_args[@]}"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v6
