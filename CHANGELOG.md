@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.99.4
+
+- Replaced the custom GitHub packaging workflow with the BigWigs WoW packager
+- Kept packaging GitHub-only, with zip artifacts uploaded from the packager output
+
 ## 0.99.3
 
 - Fixed manual hide state so the addon stays hidden until explicitly shown again, even across combat and profession refresh events

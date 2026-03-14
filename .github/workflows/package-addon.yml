@@ -19,67 +19,18 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
-      - name: Build addon zip
-        id: package
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          toc_file="$(find . -maxdepth 1 -name '*.toc' | head -n 1)"
-          if [[ -z "${toc_file}" ]]; then
-            echo "No .toc file found at repository root" >&2
-            exit 1
-          fi
-
-          addon_name="$(basename "${toc_file}" .toc)"
-          version="$(sed -n 's/^## Version:[[:space:]]*//p' "${toc_file}" | head -n 1)"
-          if [[ -z "${version}" ]]; then
-            version="${GITHUB_REF_NAME:-dev}"
-          fi
-
-          stage_dir="package/${addon_name}"
-          dist_dir="dist"
-          zip_path="${dist_dir}/${addon_name}-${version}.zip"
-
-          rm -rf package dist
-          mkdir -p "${stage_dir}" "${dist_dir}"
-          cp "${toc_file}" "${stage_dir}/$(basename "${toc_file}")"
-
-          awk '
-            /^[[:space:]]*$/ { next }
-            /^[[:space:]]*#/ { next }
-            { print }
-          ' "${toc_file}" | while IFS= read -r entry; do
-            entry="${entry//\\//}"
-            mkdir -p "${stage_dir}/$(dirname "${entry}")"
-            cp -R "${entry}" "${stage_dir}/${entry}"
-          done
-
-          for pattern in README* CHANGELOG* LICENSE*; do
-            for file in ${pattern}; do
-              [[ -e "${file}" ]] || continue
-              cp -R "${file}" "${stage_dir}/"
-            done
-          done
-
-          (
-            cd package
-            zip -r "../${zip_path}" "${addon_name}"
-          )
-
-          echo "addon_name=${addon_name}" >> "${GITHUB_OUTPUT}"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "zip_path=${zip_path}" >> "${GITHUB_OUTPUT}"
+      - name: Package addon
+        uses: BigWigsMods/packager@v2
+        env:
+          GITHUB_OAUTH: ${{ startsWith(github.ref, 'refs/tags/') && secrets.GITHUB_TOKEN || '' }}
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.package.outputs.addon_name }}-${{ steps.package.outputs.version }}
-          path: ${{ steps.package.outputs.zip_path }}
-
-      - name: Attach zip to GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ steps.package.outputs.zip_path }}
+          name: package-${{ github.ref_name }}
+          path: .release/*.zip
+          if-no-files-found: error
