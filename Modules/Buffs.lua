@@ -4,6 +4,24 @@ local function CheckEquipped(cat, buff)
     if not cat.equippedGear then
         return nil
     end
+    if cat.id == "weaponstone" then
+        for _, profID in ipairs({ "mining", "herbalism" }) do
+            local info = GB.GetProfessionDisplayInfo and GB:GetProfessionDisplayInfo(profID)
+            if info then
+                local enchantInfo = GB.GetProfessionToolEnchantInfo(info)
+                if enchantInfo and enchantInfo.hasEnchant then
+                    local enchantName = enchantInfo.enchantName
+                    if enchantInfo.enchantID and buff and buff.spellID and enchantInfo.enchantID == buff.spellID then
+                        return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
+                    end
+                    if enchantName and enchantName ~= "" and buff and buff.name and enchantName:find(buff.name, 1, true) then
+                        return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
+                    end
+                end
+            end
+        end
+        return nil
+    end
     if not (buff.itemIDs and C_Item and C_Item.IsEquippedItem) then
         return nil
     end
@@ -20,6 +38,15 @@ function GB:ToggleMainCollapsed()
 end
 
 function GB:MigrateDB()
+    if self.db and self.db.modules then
+        if self.db.modules.dundunExpanded == nil then
+            if self.db.modules.currenciesExpanded ~= nil then
+                self.db.modules.dundunExpanded = self.db.modules.currenciesExpanded and true or false
+            else
+                self.db.modules.dundunExpanded = true
+            end
+        end
+    end
     for _, cat in ipairs(GATHERBUFFS_CATEGORIES) do
         local db = self.db.categories[cat.id]
         if db and db.spellID ~= nil then

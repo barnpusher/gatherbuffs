@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.99.10
+
+- Reworked profession, profit, currency, and fishing settings visibility so tabs and toggles only appear when relevant to the current character
+- Refined the main UI layout with cleaner section headers, consistent padding, separate background/bar/text opacity controls, and updated Dundun presentation
+- Expanded profit tracking with Midnight cloth and enchanting material toggles, vendor-loot support, auto-start on first loot, and improved report output for chat and console
+- Fixed profit session handling so paused sessions no longer inflate totals or gold-per-hour and reports stay tied to tracked session loot
+- Added Fishing/Tailoring/Enchanting profit and settings fixes, plus improved profession detection fallbacks for Fishing and profession equipment
+- Added overload cooldown display, stricter aura matching for shared-name buffs, and updated debug output to show the real category detection path
+- Updated the README with GitHub release, issue-reporting, and debug command documentation and added WowUp `.previews` scaffolding
+
 ## 0.99.9
 
 - Added a Profit-tab checkbox to include Midnight enchanting disenchant mats in profit tracking

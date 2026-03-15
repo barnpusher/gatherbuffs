@@ -22,17 +22,22 @@ GB.DEFAULTS = {
     },
     ui = {
         backgroundOpacity = 0.60,
+        barOpacity = 0.50,
         rowOpacity = 0.50,
+        textOpacity = 1.00,
         scale = 1.00,
         showMinimapIcon = true,
         minimapAngle = 220,
     },
     modules = {
         globalExpanded = true,
-        currenciesExpanded = true,
+        dundunExpanded = true,
         profitExpanded = true,
         profitPriceSourceMode = "auto",
         profitPriceSource = "tsm",
+        profitAutoStartOnLoot = false,
+        profitVendorLoot = false,
+        profitVendorLootExcludeGear = false,
         profitTracking = {
             mining = true,
             herbalism = true,
@@ -157,9 +162,21 @@ function GB.GetUiConfig()
     return GB.DEFAULTS.ui
 end
 
-function GB.GetRowOpacity()
+function GB.GetBarOpacity()
     local ui = GB.GetUiConfig()
-    return math.max(0, math.min(1, ui.rowOpacity or GB.DEFAULTS.ui.rowOpacity))
+    local value = ui.barOpacity
+    if value == nil then
+        value = ui.rowOpacity
+    end
+    if value == nil then
+        value = GB.DEFAULTS.ui.barOpacity or GB.DEFAULTS.ui.rowOpacity
+    end
+    return math.max(0, math.min(1, value))
+end
+
+function GB.GetTextOpacity()
+    local ui = GB.GetUiConfig()
+    return math.max(0, math.min(1, ui.textOpacity or GB.DEFAULTS.ui.textOpacity))
 end
 
 function GB.SetRowBackground(row, r, g, b, a)
@@ -167,7 +184,14 @@ function GB.SetRowBackground(row, r, g, b, a)
         return
     end
     row.rowBG:SetTexture("Interface/Buttons/WHITE8X8")
-    row.rowBG:SetVertexColor(r or 0, g or 0, b or 0, (a or 0) * GB.GetRowOpacity())
+    row.rowBG:SetVertexColor(r or 0, g or 0, b or 0, (a or 0) * GB.GetBarOpacity())
+end
+
+function GB.SetStatusBarColor(bar, r, g, b, a)
+    if not bar then
+        return
+    end
+    bar:SetStatusBarColor(r or 0, g or 0, b or 0, (a or 1) * GB.GetBarOpacity())
 end
 
 function GB.Atan2Safe(y, x)
@@ -363,12 +387,57 @@ function GB.GetPlayerAura(spellID)
         local okName, spellName = pcall(C_Spell.GetSpellName, normalizedSpellID)
         if okName and spellName then
             local okAura, aura = pcall(C_UnitAuras.GetAuraDataBySpellName, "player", spellName, "HELPFUL")
-            if okAura and aura then
+            if okAura and aura and GB.NormalizeSpellID(aura.spellId) == normalizedSpellID then
                 return aura
             end
         end
     end
     return nil
+end
+
+function GB.GetSpellCooldownInfo(spellID)
+    local normalizedSpellID = GB.NormalizeSpellID(spellID)
+    if not normalizedSpellID then
+        return nil
+    end
+
+    local startTime, duration, isEnabled, modRate
+    if C_Spell and C_Spell.GetSpellCooldown then
+        local ok, info = pcall(C_Spell.GetSpellCooldown, normalizedSpellID)
+        if ok and info then
+            startTime = info.startTime
+            duration = info.duration
+            isEnabled = info.isEnabled
+            modRate = info.modRate
+        end
+    end
+    if startTime == nil and GetSpellCooldown then
+        local ok, s, d, e, m = pcall(GetSpellCooldown, normalizedSpellID)
+        if ok then
+            startTime, duration, isEnabled, modRate = s, d, e, m
+        end
+    end
+
+    duration = tonumber(duration) or 0
+    startTime = tonumber(startTime) or 0
+    modRate = tonumber(modRate) or 1
+    if modRate <= 0 then
+        modRate = 1
+    end
+    if isEnabled == 0 or duration <= 1.5 or startTime <= 0 then
+        return nil
+    end
+
+    local remaining = ((startTime + duration) - GetTime()) / modRate
+    if remaining <= 0 then
+        return nil
+    end
+
+    return {
+        startTime = startTime,
+        duration = duration / modRate,
+        remaining = remaining,
+    }
 end
 
 function GB.GetBuffCount(buff)
@@ -497,21 +566,21 @@ function GB.FormatShardDisplayText(info, spent, includeIcon)
     local spentThisWeek = math.max(0, spent or 0)
 
     if heldMax > 0 then
-        parts[#parts + 1] = string.format("%d/%d", held, heldMax)
+        parts[#parts + 1] = string.format("Inv.: %d/%d", held, heldMax)
     else
-        parts[#parts + 1] = tostring(held)
+        parts[#parts + 1] = string.format("Inv.: %d", held)
     end
 
     if weeklyMax > 0 then
-        parts[#parts + 1] = string.format("F %d/%d", farmedThisWeek, weeklyMax)
+        parts[#parts + 1] = string.format("Farm: %d/%d", farmedThisWeek, weeklyMax)
     else
-        parts[#parts + 1] = string.format("F %d", farmedThisWeek)
+        parts[#parts + 1] = string.format("Farm: %d", farmedThisWeek)
     end
 
     if weeklyMax > 0 then
-        parts[#parts + 1] = string.format("S %d/%d", spentThisWeek, weeklyMax)
+        parts[#parts + 1] = string.format("Spent: %d/%d", spentThisWeek, weeklyMax)
     else
-        parts[#parts + 1] = string.format("S %d", spentThisWeek)
+        parts[#parts + 1] = string.format("Spent: %d", spentThisWeek)
     end
 
     return table.concat(parts, "  ")

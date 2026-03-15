@@ -363,6 +363,10 @@ end
 function GB:BuildOptions()
     local PANEL_W = W + 34
     local TAB_H, TAB_GAP = 22, 4
+    local hasGatheringProfession = self:IsProfessionAvailable("mining")
+        or self:IsProfessionAvailable("herbalism")
+        or self:IsProfessionAvailable("skinning")
+        or self:IsProfessionAvailable("fishing")
 
     local f = GB.MakePanel(UIParent, "GatherBuffs - Settings")
     f:SetFrameStrata("HIGH")
@@ -387,21 +391,30 @@ function GB:BuildOptions()
 
     local tabDefs = {
         { id = "global", label = "Global" },
-        { id = "consumables", label = "Consum." },
-        { id = "currencies", label = "Curr." },
+        { id = "consumables", label = "Consum.", visible = hasGatheringProfession },
+        { id = "currencies", label = "Currencies" },
         { id = "profit", label = "Profit" },
     }
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        table.insert(tabDefs, { id = "prof_" .. prof.id, label = prof.label, prof = prof })
+        if not prof.profitOnly then
+            table.insert(tabDefs, { id = "prof_" .. prof.id, label = prof.label, prof = prof })
+        end
     end
-    local nTabs = #tabDefs
+    local visibleTabDefs = {}
+    for _, td in ipairs(tabDefs) do
+        local tabVisible = td.visible ~= false
+        if tabVisible and (not td.prof or self:IsProfessionAvailable(td.prof.id)) then
+            visibleTabDefs[#visibleTabDefs + 1] = td
+        end
+    end
+    local nTabs = #visibleTabDefs
     local TAB_W = math.floor((PANEL_W - PAD * 2 - TAB_GAP * (nTabs - 1)) / nTabs)
 
     local TABS_Y = -(HDR_H + 8)
     local CONTENT_Y = TABS_Y - TAB_H - 6
 
     local contentFrames = {}
-    for _, td in ipairs(tabDefs) do
+    for _, td in ipairs(visibleTabDefs) do
         local cf = CreateFrame("Frame", nil, f)
         cf:SetPoint("TOPLEFT", f, "TOPLEFT", 0, CONTENT_Y)
         cf:SetSize(PANEL_W, 400)
@@ -440,14 +453,24 @@ function GB:BuildOptions()
                 GB:ApplyUiSettings()
             end)
 
-        MakeSliderOptRow(gc, "Row Background Opacity", -150, 0.00, 1.00, 0.01,
-            function() return GB.db.ui.rowOpacity or GB.DEFAULTS.ui.rowOpacity end,
+        MakeSliderOptRow(gc, "Bars Opacity", -150, 0.00, 1.00, 0.01,
+            function() return GB.db.ui.barOpacity or GB.db.ui.rowOpacity or GB.DEFAULTS.ui.barOpacity or GB.DEFAULTS.ui.rowOpacity end,
             function(value)
+                GB.db.ui.barOpacity = value
                 GB.db.ui.rowOpacity = value
+                GB:ApplyUiSettings()
                 GB:UpdateBars()
             end)
 
-        MakeSliderOptRow(gc, "UI Scale", -194, 0.50, 1.50, 0.05,
+        MakeSliderOptRow(gc, "Text Opacity", -194, 0.00, 1.00, 0.01,
+            function() return GB.db.ui.textOpacity or GB.DEFAULTS.ui.textOpacity end,
+            function(value)
+                GB.db.ui.textOpacity = value
+                GB:ApplyUiSettings()
+                GB:UpdateBars()
+            end)
+
+        MakeSliderOptRow(gc, "UI Scale", -238, 0.50, 1.50, 0.05,
             function() return GB.db.ui.scale or GB.DEFAULTS.ui.scale end,
             function(value)
                 GB.db.ui.scale = value
@@ -468,7 +491,7 @@ function GB:BuildOptions()
 
     do
         local cc = contentFrames.currencies
-        MakeBoolOptRow(cc, "Shard of Dundun", 0,
+        MakeBoolOptRow(cc, "Enable Dundun module", 0,
             function()
                 return GB.db.currencies and GB.db.currencies.shard_of_dundun and GB.db.currencies.shard_of_dundun.enabled ~= false
             end,
@@ -484,24 +507,70 @@ function GB:BuildOptions()
         local pc = contentFrames.profit
         local y = 0
         for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-            MakeBoolOptRow(pc, "Track " .. prof.label, y,
+            if not prof.profitOnly and self:IsProfessionAvailable(prof.id) then
+                MakeBoolOptRow(pc, "Track " .. prof.label, y,
+                    function()
+                        return GB:IsProfitProfessionTracked(prof.id)
+                    end,
+                    function(value)
+                        GB.db.modules.profitTracking[prof.id] = value and true or false
+                        GB:CheckProfession()
+                        GB:UpdateProfit()
+                    end)
+                y = y - 24
+            end
+        end
+
+        if GB.HasProfessionByName("Tailoring") then
+            MakeBoolOptRow(pc, "Include Midnight cloth", y,
                 function()
-                    return GB:IsProfitProfessionTracked(prof.id)
+                    return GB:IsProfitProfessionTracked("tailoring")
                 end,
                 function(value)
-                    GB.db.modules.profitTracking[prof.id] = value and true or false
+                    GB.db.modules.profitTracking.tailoring = value and true or false
                     GB:CheckProfession()
                     GB:UpdateProfit()
                 end)
             y = y - 24
         end
 
-        MakeBoolOptRow(pc, "Include Midnight enchanting mats", y,
+        if GB.HasProfessionByName("Enchanting") then
+            MakeBoolOptRow(pc, "Include Midnight enchanting mats", y,
+                function()
+                    return GB:IsMidnightEnchantingProfitTracked()
+                end,
+                function(value)
+                    GB.db.modules.profitTracking.midnight_enchanting = value and true or false
+                    GB:UpdateProfit()
+                end)
+            y = y - 24
+        end
+
+        MakeBoolOptRow(pc, "Include vendor loot value", y,
             function()
-                return GB:IsMidnightEnchantingProfitTracked()
+                return GB.db.modules.profitVendorLoot == true
             end,
             function(value)
-                GB.db.modules.profitTracking.midnight_enchanting = value and true or false
+                GB.db.modules.profitVendorLoot = value and true or false
+                GB:UpdateProfit()
+            end)
+        y = y - 24
+
+        MakeBoolOptRow(pc, "Auto-start on first loot", y,
+            function()
+                return GB.db.modules.profitAutoStartOnLoot == true
+            end,
+            function(value)
+                GB.db.modules.profitAutoStartOnLoot = value and true or false
+            end)
+        y = y - 24
+
+        MakeBoolOptRow(pc, "Exclude gear from vendor loot", y,
+            function()
+                return GB.db.modules.profitVendorLootExcludeGear == true
+            end,
+            function(value)
+                GB.db.modules.profitVendorLootExcludeGear = value and true or false
                 GB:UpdateProfit()
             end)
         y = y - 24
@@ -539,7 +608,7 @@ function GB:BuildOptions()
         skinning = {},
         fishing = { "fishing", "fishing_chum" },
     }
-    for _, td in ipairs(tabDefs) do
+    for _, td in ipairs(visibleTabDefs) do
         if td.prof then
             local pc = contentFrames[td.id]
             MakeProfOptRow(pc, td.prof, 0)
@@ -564,35 +633,27 @@ function GB:BuildOptions()
         end
     end
 
-    for _, td in ipairs(tabDefs) do
-        if td.prof then
-            td.disabled = not (self.profMap and self.profMap[td.prof.id])
-        end
-    end
-
     local tabBtns = {}
     local function SetActiveTab(tabID)
-        for _, td in ipairs(tabDefs) do
-            if not td.disabled then
-                local btn = tabBtns[td.id]
-                local cf = contentFrames[td.id]
-                if td.id == tabID then
-                    btn:SetBackdropColor(0.16, 0.18, 0.26, 0.95)
-                    btn:SetBackdropBorderColor(0.50, 0.46, 0.22)
-                    btn.txt:SetTextColor(1, 0.90, 0.50)
-                    cf:Show()
-                else
-                    btn:SetBackdropColor(0.08, 0.08, 0.12, 0.92)
-                    btn:SetBackdropBorderColor(0.26, 0.26, 0.30)
-                    btn.txt:SetTextColor(0.56, 0.56, 0.60)
-                    cf:Hide()
-                end
+        for _, td in ipairs(visibleTabDefs) do
+            local btn = tabBtns[td.id]
+            local cf = contentFrames[td.id]
+            if td.id == tabID then
+                btn:SetBackdropColor(0.16, 0.18, 0.26, 0.95)
+                btn:SetBackdropBorderColor(0.50, 0.46, 0.22)
+                btn.txt:SetTextColor(1, 0.90, 0.50)
+                cf:Show()
+            else
+                btn:SetBackdropColor(0.08, 0.08, 0.12, 0.92)
+                btn:SetBackdropBorderColor(0.26, 0.26, 0.30)
+                btn.txt:SetTextColor(0.56, 0.56, 0.60)
+                cf:Hide()
             end
         end
     end
 
     local tabX = PAD
-    for _, td in ipairs(tabDefs) do
+    for _, td in ipairs(visibleTabDefs) do
         local btn = CreateFrame("Button", nil, f, "BackdropTemplate")
         btn:SetPoint("TOPLEFT", f, "TOPLEFT", tabX, TABS_Y)
         btn:SetSize(TAB_W, TAB_H)
@@ -608,20 +669,14 @@ function GB:BuildOptions()
         btnTxt:SetText(td.label)
         btn.txt = btnTxt
         tabBtns[td.id] = btn
-        if td.disabled then
-            btn.txt:SetTextColor(0.35, 0.35, 0.38)
-            btn:SetBackdropColor(0.05, 0.05, 0.07, 0.75)
-            btn:SetBackdropBorderColor(0.18, 0.18, 0.20)
-        else
-            local capturedID = td.id
-            btn:SetScript("OnClick", function() SetActiveTab(capturedID) end)
-        end
+        local capturedID = td.id
+        btn:SetScript("OnClick", function() SetActiveTab(capturedID) end)
         tabX = tabX + TAB_W + TAB_GAP
     end
 
     SetActiveTab("global")
 
-    local contentH = math.max(244, 28) + PAD
+    local contentH = math.max(288, 28) + PAD
     f:SetSize(PANEL_W, HDR_H + 8 + TAB_H + 6 + contentH + PAD * 2)
     f:ClearAllPoints()
     if self.db.optX and self.db.optY then
@@ -636,13 +691,15 @@ function GB:BuildOptions()
 end
 
 function GB:ToggleOptions()
-    if not self.optFrame then
-        self.optFrame = self:BuildOptions()
-    end
-    if self.optFrame:IsShown() then
+    if self.optFrame and self.optFrame:IsShown() then
         self.optFrame:Hide()
         CloseDropdown()
     else
+        if self.optFrame then
+            self.optFrame:Hide()
+            self.optFrame = nil
+        end
+        self.optFrame = self:BuildOptions()
         self.optFrame:Show()
     end
 end

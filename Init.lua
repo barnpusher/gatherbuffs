@@ -31,10 +31,10 @@ end
 
 function GB:CheckProfession()
     self.profMap, self.profOrder = GB.SnapshotProfessions()
-    self.hasFishing = GB.HasProfessionByName("Fishing")
+    self.hasFishing = self:HasFishingProfession() or GB.HasProfessionByName("Fishing")
     self.hasProfitProfession = false
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        if self.profMap[prof.id] and self:IsProfitProfessionTracked(prof.id) then
+        if self:IsProfessionAvailable(prof.id) and self:IsProfitProfessionTracked(prof.id) then
             self.hasProfitProfession = true
             break
         end
@@ -176,9 +176,9 @@ SlashCmdList.GATHERBUFFS = function(msg)
         for _, cat in ipairs(GATHERBUFFS_CATEGORIES) do
             local db = GB.db.categories[cat.id]
             if db and db.enabled then
-                local buff = GB:GetSelectedBuff(cat.id)
+                local profID = cat.professions and cat.professions[1] or nil
+                local buff, aura = GB:GetRowBuff(cat.id, profID)
                 if buff then
-                    local aura = GB.GetPlayerAura(buff.spellID)
                     L(string.format("  [%s] spellID=%-8s  %s  %s", cat.id, tostring(buff.spellID), buff.name, aura and "FOUND" or "missing"))
                 end
             end

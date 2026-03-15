@@ -1,5 +1,50 @@
 local _, GB = ...
 
+function GB:HasFishingProfession()
+    local _, _, _, fishing = GetProfessions()
+    return fishing ~= nil
+end
+
+function GB:IsProfessionAvailable(profID)
+    if profID == "fishing" then
+        return self:HasFishingProfession() or self.hasFishing == true or (self.profMap and self.profMap[profID] ~= nil)
+    end
+    return self.profMap and self.profMap[profID] ~= nil
+end
+
+function GB:GetProfessionDisplayInfo(profID)
+    if self.profMap and self.profMap[profID] then
+        return self.profMap[profID]
+    end
+    if profID ~= "fishing" then
+        return nil
+    end
+
+    local _, _, _, fishing = GetProfessions()
+    if not fishing then
+        return nil
+    end
+
+    local name, icon, skill, maxSkill, _, _, skillLineID, bonus, _, _, currentSkillLineName = GetProfessionInfo(fishing)
+    if not name then
+        return nil
+    end
+
+    return {
+        id = "fishing",
+        label = "Fishing",
+        icon = icon,
+        skill = skill or 0,
+        maxSkill = maxSkill or 0,
+        bonus = bonus or 0,
+        total = (skill or 0) + (bonus or 0),
+        skillLineID = skillLineID,
+        currentSkillLineName = currentSkillLineName,
+        professionIndex = fishing,
+        professionSlotIndex = "fishing",
+    }
+end
+
 function GB:IsProfessionModuleEnabled(profID)
     local db = self.db.modules.professions[profID]
     return db and db.enabled ~= false
@@ -34,7 +79,7 @@ end
 function GB:GetTrackedProfitProfessionMap()
     local tracked = {}
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        if self.profMap and self.profMap[prof.id] and self:IsProfessionModuleEnabled(prof.id) and self:IsProfitProfessionTracked(prof.id) then
+        if self:IsProfessionAvailable(prof.id) and self:IsProfessionModuleEnabled(prof.id) and self:IsProfitProfessionTracked(prof.id) then
             tracked[prof.id] = true
         end
     end

@@ -27,6 +27,8 @@ function GB:LoadSessionState()
     self.sessionBaseline = {}
     self.sessionLoot = {}
     self.sessionOrder = {}
+    self.sessionVendorLoot = {}
+    self.sessionVendorOrder = {}
 
     for itemID, count in pairs(session.inventoryBaseline or {}) do
         local normalizedID = tonumber(itemID)
@@ -51,6 +53,21 @@ function GB:LoadSessionState()
             table.insert(self.sessionOrder, item.itemID)
         end
     end
+
+    for _, itemID in ipairs(session.vendorOrder or {}) do
+        local key = tostring(itemID)
+        local item = session.vendorLoot and session.vendorLoot[key]
+        if item and item.itemID then
+            self.sessionVendorLoot[item.itemID] = {
+                itemID = item.itemID,
+                link = item.link,
+                name = item.name,
+                count = item.count or 0,
+                firstSeen = item.firstSeen or self.sessionStart,
+            }
+            table.insert(self.sessionVendorOrder, item.itemID)
+        end
+    end
 end
 
 function GB:SaveSessionState()
@@ -63,6 +80,8 @@ function GB:SaveSessionState()
         inventoryBaseline = {},
         loot = {},
         order = {},
+        vendorLoot = {},
+        vendorOrder = {},
     }
 
     for itemID, count in pairs(self.sessionBaseline or {}) do
@@ -88,6 +107,21 @@ function GB:SaveSessionState()
         end
     end
 
+    for _, itemID in ipairs(self.sessionVendorOrder or {}) do
+        local item = self.sessionVendorLoot and self.sessionVendorLoot[itemID]
+        if item then
+            local key = tostring(itemID)
+            session.vendorOrder[#session.vendorOrder + 1] = itemID
+            session.vendorLoot[key] = {
+                itemID = item.itemID,
+                link = item.link,
+                name = item.name,
+                count = item.count or 0,
+                firstSeen = item.firstSeen or self.sessionStart,
+            }
+        end
+    end
+
     self.db.session = session
 end
 
@@ -104,6 +138,21 @@ function GB:TogglePause()
     self:UpdateProfit()
 end
 
+function GB:MaybeAutoStartSession()
+    if not (self.db and self.db.modules and self.db.modules.profitAutoStartOnLoot) then
+        return false
+    end
+    if not self.sessionPaused then
+        return true
+    end
+    local pausedAt = self.sessionPausedAt or self.sessionStart or time()
+    self.sessionPausedTotal = (self.sessionPausedTotal or 0) + (time() - pausedAt)
+    self.sessionPaused = false
+    self.sessionPausedAt = 0
+    self:SaveSessionState()
+    return true
+end
+
 function GB:ResetSession()
     self.sessionStart = time()
     self.sessionPaused = true
@@ -113,6 +162,8 @@ function GB:ResetSession()
     self.sessionBaseline = {}
     self.sessionLoot = {}
     self.sessionOrder = {}
+    self.sessionVendorLoot = {}
+    self.sessionVendorOrder = {}
     self.lastGphValue = 0
     self.lastGphUpdateTime = nil
     self.gphDirty = true
@@ -288,6 +339,23 @@ function GB:TrackLoot(itemID, amount, link)
     self:SaveSessionState()
 end
 
+function GB:TrackVendorLoot(itemID, amount, link)
+    if not itemID or not amount or amount <= 0 then
+        return
+    end
+    local item = self.sessionVendorLoot[itemID]
+    if not item then
+        item = { itemID = itemID, name = link or ("item:" .. itemID), count = 0, firstSeen = time() }
+        self.sessionVendorLoot[itemID] = item
+        table.insert(self.sessionVendorOrder, itemID)
+    end
+    item.count = item.count + amount
+    item.link = link or item.link
+    item.name = GetItemInfo(itemID) or item.name
+    self.gphDirty = true
+    self:SaveSessionState()
+end
+
 function GB:GetBagItemCount(itemID)
     local count = GetItemCount(itemID, false, false, false, false)
     return math.max(0, tonumber(count) or 0)
@@ -331,6 +399,58 @@ local function EscapeChatMessage(message)
     return tostring(message or ""):gsub("|", "||")
 end
 
+local function GetVendorSellPrice(itemID)
+    local _, _, _, _, _, _, _, _, _, _, sellPrice = GetItemInfo(itemID)
+    return math.max(0, tonumber(sellPrice) or 0)
+end
+
+local function IsGearItem(itemID)
+    local _, _, _, _, _, _, _, _, equipLoc, _, _, classID = GetItemInfo(itemID)
+    if classID == LE_ITEM_CLASS_ARMOR or classID == LE_ITEM_CLASS_WEAPON then
+        return true
+    end
+    return equipLoc ~= nil and equipLoc ~= ""
+end
+
+function GB:ShouldIncludeVendorLootItem(itemID)
+    if not (self.db and self.db.modules and self.db.modules.profitVendorLoot) then
+        return false
+    end
+    if self.gatherLookup and self.gatherLookup[itemID] then
+        return false
+    end
+    if GetVendorSellPrice(itemID) <= 0 then
+        return false
+    end
+    if self.db.modules.profitVendorLootExcludeGear == true and GB.HasProfessionByName("Enchanting") and IsGearItem(itemID) then
+        return false
+    end
+    return true
+end
+
+function GB:BuildVendorLootSummary()
+    if not (self.db and self.db.modules and self.db.modules.profitVendorLoot) then
+        return 0, 0
+    end
+
+    local totalValue, totalCount = 0, 0
+
+    for _, itemID in ipairs(self.sessionVendorOrder or {}) do
+        local item = self.sessionVendorLoot and self.sessionVendorLoot[itemID]
+        if item and item.count and item.count > 0 then
+            if self:ShouldIncludeVendorLootItem(itemID) then
+                local vendorPrice = GetVendorSellPrice(itemID)
+                if vendorPrice > 0 then
+                    totalValue = totalValue + (vendorPrice * item.count)
+                    totalCount = totalCount + item.count
+                end
+            end
+        end
+    end
+
+    return totalValue, totalCount
+end
+
 function GB:BuildCurrentProfitGroups()
     local totalValue = 0
     local grouped = {}
@@ -338,13 +458,9 @@ function GB:BuildCurrentProfitGroups()
     local groupDisplay = {}
     local trackedProfMap = self:GetTrackedProfitProfessionMap()
 
-    self:EnsureInventoryBaseline()
-
     for itemID, lookupInfo in pairs(self.gatherLookup or {}) do
         if GB.IsGatheringMat(itemID, trackedProfMap, self.gatherLookup) then
-            local bagDelta = self:GetBagItemCount(itemID) - ((self.sessionBaseline and self.sessionBaseline[itemID]) or 0)
-            local trackedLoot = ((self.sessionLoot and self.sessionLoot[itemID] and self.sessionLoot[itemID].count) or 0)
-            local count = math.min(math.max(0, bagDelta), math.max(0, trackedLoot))
+            local count = (self.sessionLoot and self.sessionLoot[itemID] and self.sessionLoot[itemID].count) or 0
             if count > 0 then
                 local item = {
                     itemID = itemID,
@@ -376,6 +492,8 @@ function GB:BuildProfitReportLines()
     local lines = {}
     local elapsed = self:GetActiveElapsed()
     local grouped, groupOrder, groupDisplay, totalValue = self:BuildCurrentProfitGroups()
+    local vendorValue, vendorCount = self:BuildVendorLootSummary()
+    totalValue = totalValue + vendorValue
 
     local gphValue = 0
     if totalValue > 0 and elapsed > 0 then
@@ -383,6 +501,9 @@ function GB:BuildProfitReportLines()
     end
     lines[#lines + 1] = string.format("Session total: %s", GB.FormatGoldPlain(totalValue))
     lines[#lines + 1] = string.format("Per hour: %s", GB.FormatGoldPlain(gphValue))
+    if vendorValue > 0 then
+        lines[#lines + 1] = string.format("Vendor loot: %s (%d items)", GB.FormatGoldPlain(vendorValue), vendorCount)
+    end
 
     for _, groupKey in ipairs(groupOrder) do
         local variants = grouped[groupKey]
@@ -411,7 +532,7 @@ function GB:BuildProfitReportLines()
         end
     end
 
-    if #groupOrder == 0 then
+    if #groupOrder == 0 and vendorValue <= 0 then
         lines[#lines + 1] = "No tracked session items"
     end
 
@@ -487,7 +608,8 @@ end
 function GB:UpdateProfit()
     local totalValue, rows = 0, {}
     local byGroup, groupOrder, groupDisplay, groupedTotalValue = self:BuildCurrentProfitGroups()
-    totalValue = groupedTotalValue or 0
+    local vendorValue, vendorCount = self:BuildVendorLootSummary()
+    totalValue = (groupedTotalValue or 0) + vendorValue
 
     for _, groupKey in ipairs(groupOrder) do
         local variants = byGroup[groupKey]
@@ -526,6 +648,10 @@ function GB:UpdateProfit()
         local countStr = multiQ and table.concat(parts, "  ") or ("x" .. totalCount)
         local valueStr = lineValue > 0 and GB.FormatGoldSilver(lineValue) or "(no price)"
         table.insert(rows, { left = string.format("%s  %s", name, countStr), right = valueStr })
+    end
+
+    if vendorValue > 0 then
+        table.insert(rows, { left = string.format("Vendor loot  x%d", vendorCount), right = GB.FormatGoldSilver(vendorValue) })
     end
 
     self.profitVisibleRowCount = #rows
@@ -983,7 +1109,21 @@ function GB:HandleLoot(msg)
         local amount = tonumber(countText) or 1
         if itemID then
             local ignored = GATHERBUFFS_LOOT_IGNORE and GATHERBUFFS_LOOT_IGNORE[itemID]
-            if GB.IsGatheringMat(itemID, trackedProfMap, self.gatherLookup) then
+            local isGatherMat = GB.IsGatheringMat(itemID, trackedProfMap, self.gatherLookup)
+            local countsForProfit = not ignored and (isGatherMat or self:ShouldIncludeVendorLootItem(itemID))
+            if countsForProfit then
+                self:MaybeAutoStartSession()
+            end
+            if countsForProfit and self.sessionPaused then
+                if self.lootDebug then
+                    print("|cffaaffaaGB paused:|r ignoring profit tracking while session is paused")
+                end
+                countsForProfit = false
+            end
+            if countsForProfit then
+                self:TrackVendorLoot(itemID, amount, itemLink)
+            end
+            if isGatherMat and countsForProfit then
                 self:TrackLoot(itemID, amount, itemLink)
                 local name = GetItemInfo(itemID) or "?"
                 self:AppendLootLog(string.format("%s  tracked  id=%-8d  x%-3d  %s", date("%H:%M:%S"), itemID, amount, name))
@@ -1012,6 +1152,9 @@ end
 
 function GB:ProcessPendingLoot()
     if not self.pendingLoot or #self.pendingLoot == 0 then
+        return
+    end
+    if self.sessionPaused then
         return
     end
     local trackedProfMap = self:GetTrackedProfitProfessionMap()

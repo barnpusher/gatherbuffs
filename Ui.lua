@@ -16,6 +16,45 @@ local FRAME_BG_COLOR = GB.FRAME_BG_COLOR
 local TREE_BG_COLOR = GB.TREE_BG_COLOR
 local PROF_ICONS = GB.PROF_ICONS
 
+local function SetTextAlpha(region)
+    if region and region.SetAlpha then
+        region:SetAlpha(GB.GetTextOpacity())
+    end
+end
+
+local function SetBarTextureAlpha(texture, r, g, b, a)
+    if texture and texture.SetVertexColor then
+        texture:SetVertexColor(r or 0, g or 0, b or 0, (a or 1) * GB.GetBarOpacity())
+    end
+end
+
+local function ApplyRowTextAlpha(row)
+    if not row then
+        return
+    end
+    SetTextAlpha(row.lbl)
+    SetTextAlpha(row.nm)
+    SetTextAlpha(row.tm)
+    SetTextAlpha(row.cnt)
+    SetTextAlpha(row.left)
+    SetTextAlpha(row.right)
+    SetTextAlpha(row.val)
+    SetTextAlpha(row.txt)
+    if row.icon and row.icon.SetAlpha then
+        row.icon:SetAlpha(GB.GetTextOpacity())
+    end
+end
+
+local function ApplyPanelChrome(panel)
+    if not panel then
+        return
+    end
+    SetBarTextureAlpha(panel.headerBG, HEADER_BG_COLOR[1], HEADER_BG_COLOR[2], HEADER_BG_COLOR[3], HEADER_BG_COLOR[4])
+    SetTextAlpha(panel.title)
+    SetTextAlpha(panel.summary)
+    SetTextAlpha(panel.arrow)
+end
+
 local function MakePanel(parent, titleText)
     local f = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     f:SetBackdrop({
@@ -40,7 +79,8 @@ local function MakePanel(parent, titleText)
     title:SetShadowColor(0, 0, 0, 1)
     title:SetShadowOffset(2, -2)
     local summary = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    summary:SetPoint("RIGHT", -20, 0)
+    summary:SetPoint("LEFT", title, "RIGHT", 10, 0)
+    summary:SetPoint("RIGHT", -6, 0)
     summary:SetJustifyH("RIGHT")
     summary:SetJustifyV("MIDDLE")
     summary:SetTextColor(1, 1, 1)
@@ -49,7 +89,7 @@ local function MakePanel(parent, titleText)
     local arrow = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     arrow:SetPoint("RIGHT", -6, 0)
     arrow:SetJustifyV("MIDDLE")
-    arrow:SetText("v")
+    arrow:SetText("")
     arrow:SetTextColor(1, 1, 1)
     arrow:SetShadowColor(0, 0, 0, 1)
     arrow:SetShadowOffset(2, -2)
@@ -126,6 +166,8 @@ local function MakeRow(parent, catDef, profID)
     cnt:SetShadowOffset(2, -2)
 
     row.nm, row.bar, row.tm, row.cnt = nm, bar, tm, cnt
+    row.lbl = lbl
+    row.barBG = barBG
     return row
 end
 
@@ -153,11 +195,32 @@ end
 
 GB.MakeInfoRow = MakeInfoRow
 
+local function MakeCurrencyTextRow(parent)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetHeight(ROW_H)
+
+    local icon = row:CreateTexture(nil, "OVERLAY")
+    icon:SetPoint("LEFT", 0, 0)
+    icon:SetSize(16, 16)
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    row.icon = icon
+
+    local txt = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    txt:SetPoint("LEFT", icon, "RIGHT", 6, 0)
+    txt:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+    txt:SetJustifyH("LEFT")
+    txt:SetShadowColor(0, 0, 0, 1)
+    txt:SetShadowOffset(2, -2)
+    row.txt = txt
+
+    return row
+end
+
 local function MakeMainFrame()
     local f = CreateFrame("Frame", "GatherBuffsFrame", UIParent, "BackdropTemplate")
     f:SetBackdrop({
         bgFile = "Interface/Buttons/WHITE8X8",
-        insets = { left = -3, right = -3, top = -1, bottom = -2 },
+        insets = { left = 0, right = 0, top = 0, bottom = 0 },
     })
     f:SetBackdropColor(FRAME_BG_COLOR[1], FRAME_BG_COLOR[2], FRAME_BG_COLOR[3], FRAME_BG_COLOR[4])
     f:SetMovable(true)
@@ -184,11 +247,69 @@ function GB:ApplyUiSettings()
         self.mainFrame:SetScale(scale)
     end
     if self.mainTree and self.mainTree.SetBackdropColor then
-        self.mainTree:SetBackdropColor(TREE_BG_COLOR[1], TREE_BG_COLOR[2], TREE_BG_COLOR[3], math.min(1, bgAlpha + 0.12))
+        self.mainTree:SetBackdropColor(TREE_BG_COLOR[1], TREE_BG_COLOR[2], TREE_BG_COLOR[3], bgAlpha)
     end
     if self.optFrame and self.optFrame.SetBackdropColor then
-        self.optFrame:SetBackdropColor(PANEL_BG_COLOR[1], PANEL_BG_COLOR[2], PANEL_BG_COLOR[3], math.max(0.20, bgAlpha))
+        self.optFrame:SetBackdropColor(PANEL_BG_COLOR[1], PANEL_BG_COLOR[2], PANEL_BG_COLOR[3], bgAlpha)
         self.optFrame:SetScale(scale)
+    end
+
+    if self.commonPanel and self.commonPanel.SetBackdropColor then
+        self.commonPanel:SetBackdropColor(PANEL_BG_COLOR[1], PANEL_BG_COLOR[2], PANEL_BG_COLOR[3], bgAlpha)
+    end
+    if self.currencyPanel and self.currencyPanel.SetBackdropColor then
+        self.currencyPanel:SetBackdropColor(PANEL_BG_COLOR[1], PANEL_BG_COLOR[2], PANEL_BG_COLOR[3], bgAlpha)
+    end
+    if self.profitPanel and self.profitPanel.SetBackdropColor then
+        self.profitPanel:SetBackdropColor(PANEL_BG_COLOR[1], PANEL_BG_COLOR[2], PANEL_BG_COLOR[3], bgAlpha)
+    end
+    for _, panel in pairs(self.profCards or {}) do
+        if panel and panel.SetBackdropColor then
+            panel:SetBackdropColor(PANEL_BG_COLOR[1], PANEL_BG_COLOR[2], PANEL_BG_COLOR[3], bgAlpha)
+        end
+    end
+
+    ApplyPanelChrome(self.commonPanel)
+    ApplyPanelChrome(self.currencyPanel)
+    ApplyPanelChrome(self.profitPanel)
+    for _, panel in pairs(self.profCards or {}) do
+        ApplyPanelChrome(panel)
+        SetTextAlpha(panel.skill)
+        SetTextAlpha(panel.total)
+        SetTextAlpha(panel.buffs)
+        SetTextAlpha(panel.nodes)
+    end
+
+    SetTextAlpha(self.combatText)
+    SetTextAlpha(self.profitMeta)
+    SetTextAlpha(self.profitPauseTxt)
+    SetTextAlpha(self.profitResetTxt)
+    SetTextAlpha(self.profitPartyTxt)
+    SetTextAlpha(self.profitConsoleTxt)
+
+    for _, row in pairs(self.commonRows or {}) do
+        ApplyRowTextAlpha(row)
+        SetBarTextureAlpha(row.barBG, 0.08, 0.08, 0.10, 0.88)
+    end
+    ApplyRowTextAlpha(self.shardRow)
+    if self.shardRow then
+        SetBarTextureAlpha(self.shardRow.barBG, 0.08, 0.08, 0.10, 0.88)
+    end
+    ApplyRowTextAlpha(self.currencyShardRow)
+    for _, panel in pairs(self.profCards or {}) do
+        ApplyRowTextAlpha(panel.overload)
+        ApplyRowTextAlpha(panel.weaponstone)
+        ApplyRowTextAlpha(panel.tool)
+        ApplyRowTextAlpha(panel.enchant)
+        if panel.overload then
+            SetBarTextureAlpha(panel.overload.barBG, 0.08, 0.08, 0.10, 0.88)
+        end
+        if panel.weaponstone then
+            SetBarTextureAlpha(panel.weaponstone.barBG, 0.08, 0.08, 0.10, 0.88)
+        end
+    end
+    for _, row in ipairs(self.profitRows or {}) do
+        ApplyRowTextAlpha(row)
     end
 
     if self.minimapButton then
@@ -368,7 +489,7 @@ end
 function GB:SetPanelExpanded(panel, expanded)
     panel.expanded = expanded and true or false
     panel.content:SetShown(panel.expanded)
-    panel.arrow:SetText(panel.expanded and "v" or ">")
+    panel.arrow:SetText("")
 end
 
 function GB:ConfigurePanel(panel, expanded, onClick)
@@ -390,9 +511,9 @@ function GB:BuildStaticUI()
     self.mainFrame = MakeMainFrame()
     self.mainFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", self.db.mainX, self.db.mainY)
     self.mainTree = CreateFrame("Frame", nil, self.mainFrame, "BackdropTemplate")
-    self.mainTree:SetPoint("TOPLEFT", 2, -2)
-    self.mainTree:SetPoint("TOPRIGHT", -2, -2)
-    self.mainTree:SetWidth(W - 4)
+    self.mainTree:SetPoint("TOPLEFT", 1, -1)
+    self.mainTree:SetPoint("TOPRIGHT", -1, -1)
+    self.mainTree:SetWidth(W - 2)
     self.mainTree:SetBackdrop({
         bgFile = "Interface/Buttons/WHITE8X8",
         insets = { left = 0, right = 0, top = 0, bottom = 0 },
@@ -430,13 +551,12 @@ function GB:BuildStaticUI()
     self.shardRow = MakeRow(self.commonPanel.content, { id = "shard_of_dundun", label = "Shard" })
     self.shardRow.cnt:Hide()
     self.shardRow:Hide()
-    self.currencyPanel = MakePanel(self.mainTree, "Currencies")
-    self:ConfigurePanel(self.currencyPanel, self.db.modules.currenciesExpanded, function()
-        GB.db.modules.currenciesExpanded = not GB.db.modules.currenciesExpanded
+    self.currencyPanel = MakePanel(self.mainTree, "Dundun")
+    self:ConfigurePanel(self.currencyPanel, self.db.modules.dundunExpanded, function()
+        GB.db.modules.dundunExpanded = not GB.db.modules.dundunExpanded
         GB:Rebuild()
     end)
-    self.currencyShardRow = MakeRow(self.currencyPanel.content, { id = "shard_of_dundun", label = "Shard" })
-    self.currencyShardRow.cnt:Hide()
+    self.currencyShardRow = MakeCurrencyTextRow(self.currencyPanel.content)
     self.currencyShardRow:Hide()
 
     self.profCards = {}
@@ -504,6 +624,7 @@ function GB:BuildStaticUI()
     resetText:SetAllPoints()
     resetText:SetText("Reset")
     resetText:SetTextColor(0.92, 0.78, 0.78)
+    self.profitResetTxt = resetText
     self.profitResetBtn:SetScript("OnClick", function() GB:ResetSession() end)
 
     self.profitPauseBtn = CreateFrame("Button", nil, self.profitPanel.content, "BackdropTemplate")
@@ -538,6 +659,7 @@ function GB:BuildStaticUI()
     partyText:SetAllPoints()
     partyText:SetText("Report")
     partyText:SetTextColor(0.72, 0.82, 0.96)
+    self.profitPartyTxt = partyText
     self.profitPartyBtn:SetScript("OnClick", function() GB:SendProfitReportToChat() end)
 
     self.profitConsoleBtn = CreateFrame("Button", nil, self.profitPanel.content, "BackdropTemplate")
@@ -555,6 +677,7 @@ function GB:BuildStaticUI()
     consoleText:SetAllPoints()
     consoleText:SetText("Console")
     consoleText:SetTextColor(0.84, 0.78, 0.96)
+    self.profitConsoleTxt = consoleText
     self.profitConsoleBtn:SetScript("OnClick", function() GB:PrintProfitReportToConsole() end)
     self.profitRows = {}
     self.profitVisibleRowCount = 0
@@ -613,7 +736,7 @@ local function ApplyRow(row, buff, aura)
         row.nm:SetText("- None -")
         row.nm:SetTextColor(0.38, 0.38, 0.38)
         row.bar:SetValue(0)
-        row.bar:SetStatusBarColor(0.18, 0.18, 0.18)
+        GB.SetStatusBarColor(row.bar, 0.18, 0.18, 0.18)
         row.tm:SetText("-")
         GB.SetRowBackground(row, 0, 0, 0, 0)
         return
@@ -627,7 +750,7 @@ local function ApplyRow(row, buff, aura)
     if not buff.spellID then
         row.nm:SetTextColor(0.75, 0.68, 0.35)
         row.bar:SetValue(0)
-        row.bar:SetStatusBarColor(0.28, 0.24, 0.10)
+        GB.SetStatusBarColor(row.bar, 0.28, 0.24, 0.10)
         row.tm:SetText("ID?")
         GB.SetRowBackground(row, 0.28, 0.22, 0.02, 0.25)
         return
@@ -645,21 +768,33 @@ local function ApplyRow(row, buff, aura)
         row.nm:SetTextColor(1, 1, 1)
         GB.SetRowBackground(row, 0, 0, 0, 0)
         if pct > 0.30 then
-            row.bar:SetStatusBarColor(0.18, 0.72, 0.22)
+            GB.SetStatusBarColor(row.bar, 0.18, 0.72, 0.22)
         elseif pct > 0.10 then
-            row.bar:SetStatusBarColor(0.90, 0.55, 0.08)
+            GB.SetStatusBarColor(row.bar, 0.90, 0.55, 0.08)
         else
-            row.bar:SetStatusBarColor(0.88, 0.18, 0.18)
+            GB.SetStatusBarColor(row.bar, 0.88, 0.18, 0.18)
         end
     elseif catDef and catDef.showAvailable then
-        row.bar:SetValue(0.15)
-        row.bar:SetStatusBarColor(0.18, 0.45, 0.18)
-        row.tm:SetText("Avail")
-        row.nm:SetTextColor(0.65, 0.82, 0.65)
+        local cooldown = GB.GetSpellCooldownInfo(buff.spellID)
+        if cooldown then
+            local pct = 0
+            if cooldown.duration and cooldown.duration > 0 then
+                pct = math.max(0, math.min(1, cooldown.remaining / cooldown.duration))
+            end
+            row.bar:SetValue(pct)
+            GB.SetStatusBarColor(row.bar, 0.62, 0.32, 0.10)
+            row.tm:SetText(GB.FormatTime(cooldown.remaining))
+            row.nm:SetTextColor(0.90, 0.74, 0.42)
+        else
+            row.bar:SetValue(0.15)
+            GB.SetStatusBarColor(row.bar, 0.18, 0.45, 0.18)
+            row.tm:SetText("Avail")
+            row.nm:SetTextColor(0.65, 0.82, 0.65)
+        end
         GB.SetRowBackground(row, 0, 0, 0, 0)
     else
         row.bar:SetValue(0)
-        row.bar:SetStatusBarColor(0.40, 0.10, 0.10)
+        GB.SetStatusBarColor(row.bar, 0.40, 0.10, 0.10)
         row.tm:SetText("MISS")
         row.nm:SetTextColor(0.52, 0.52, 0.52)
         GB.SetRowBackground(row, 0.55, 0.05, 0.05, 0.32)
@@ -676,10 +811,6 @@ local function ApplyCurrencyRow(row, info)
     end
 
     row:Show()
-    GB.SetRowBackground(row, 0, 0, 0, 0)
-    row.cnt:Hide()
-    row.nm:SetText("Dundun")
-    row.nm:SetTextColor(1, 1, 1)
 
     if row.icon then
         if info.iconFileID then
@@ -690,26 +821,9 @@ local function ApplyCurrencyRow(row, info)
         end
     end
 
-    local earned = info.quantityEarnedThisWeek or 0
-    local weeklyMax = info.maxWeeklyQuantity or 0
-    local current = info.quantity or 0
-    local totalMax = info.maxQuantity or 0
-    local shownMax = weeklyMax > 0 and weeklyMax or math.max(totalMax, current, 1)
-    local shownValue = weeklyMax > 0 and earned or current
-    local pct = shownMax > 0 and math.max(0, math.min(1, shownValue / shownMax)) or 0
-
-    row.bar:SetValue(pct)
-    row.tm:SetText(GB.FormatShardDisplayText(info, GB:GetShardSpentThisWeek(info), false))
-    if weeklyMax > 0 then
-        if shownValue >= shownMax then
-            row.bar:SetStatusBarColor(0.18, 0.72, 0.22)
-        elseif shownValue >= math.max(1, math.floor(shownMax * 0.5)) then
-            row.bar:SetStatusBarColor(0.90, 0.55, 0.08)
-        else
-            row.bar:SetStatusBarColor(0.32, 0.60, 0.86)
-        end
-    else
-        row.bar:SetStatusBarColor(0.32, 0.60, 0.86)
+    if row.txt then
+        row.txt:SetText(string.format("Shards of Dundun   %s", GB.FormatShardDisplayText(info, GB:GetShardSpentThisWeek(info), false)))
+        row.txt:SetTextColor(1, 1, 1)
     end
 end
 
@@ -717,14 +831,14 @@ function GB:Rebuild()
     self.profMap, self.profOrder = GB.SnapshotProfessions()
     self.hasProfitProfession = false
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        if self.profMap[prof.id] and self:IsProfessionModuleEnabled(prof.id) and self:IsProfitProfessionTracked(prof.id) then
+        if self:IsProfessionAvailable(prof.id) and self:IsProfessionModuleEnabled(prof.id) and self:IsProfitProfessionTracked(prof.id) then
             self.hasProfitProfession = true
             break
         end
     end
     self.commonPanel:Show()
-    local activeCommon, y = {}, 0
-    self.commonPanel:SetPoint("TOPLEFT", self.mainTree, "TOPLEFT", PAD, 0)
+    local activeCommon, y = {}, PAD
+    self.commonPanel:SetPoint("TOPLEFT", self.mainTree, "TOPLEFT", PAD, -y)
     local commonStart = 4
     local n = 0
     for _, cat in ipairs(GATHERBUFFS_CATEGORIES) do
@@ -760,18 +874,18 @@ function GB:Rebuild()
     self:SetPanelExpanded(self.commonPanel, self.db.modules.globalExpanded)
     local commonHeight = self.db.modules.globalExpanded and (commonStart + math.max(1, n) * (ROW_H + 3) + PAD + 21) or HDR_H
     self.commonPanel:SetSize(W - PAD * 2, commonHeight)
-    y = y + commonHeight + 6
+    y = y + commonHeight + PAD
 
     local shardInfo = GB.GetShardOfDundunInfo()
     local shardEnabled = self.db.currencies and self.db.currencies.shard_of_dundun and self.db.currencies.shard_of_dundun.enabled ~= false
     if shardInfo and shardEnabled then
         self.currencyPanel:Show()
         self.currencyPanel:SetPoint("TOPLEFT", self.mainTree, "TOPLEFT", PAD, -y)
-        self:SetPanelExpanded(self.currencyPanel, self.db.modules.currenciesExpanded)
-        if self.db.modules.currenciesExpanded then
+        self:SetPanelExpanded(self.currencyPanel, self.db.modules.dundunExpanded)
+        if self.db.modules.dundunExpanded then
             self.currencyShardRow:ClearAllPoints()
             self.currencyShardRow:SetPoint("TOPLEFT", self.currencyPanel.content, "TOPLEFT", PAD, -4)
-            self.currencyShardRow:SetWidth(W - PAD * 4)
+            self.currencyShardRow:SetWidth(W - PAD * 3)
             self.currencyShardRow:SetHeight(ROW_H)
             self.currencyShardRow:SetShown(true)
             self.currencyPanel:SetSize(W - PAD * 2, 4 + ROW_H + PAD + 21)
@@ -779,14 +893,14 @@ function GB:Rebuild()
             self.currencyShardRow:Hide()
             self.currencyPanel:SetSize(W - PAD * 2, HDR_H)
         end
-        y = y + self.currencyPanel:GetHeight() + 6
+        y = y + self.currencyPanel:GetHeight() + PAD
     else
         self.currencyPanel:Hide()
         self.currencyShardRow:Hide()
     end
 
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        local card, info = self.profCards[prof.id], self.profMap[prof.id]
+        local card, info = self.profCards[prof.id], self:GetProfessionDisplayInfo(prof.id)
         if card and info and self:IsProfessionModuleEnabled(prof.id) then
             local nodeText = GB.GetNodeSkillSummary(prof.id)
             local showNodes = nodeText and nodeText ~= ""
@@ -851,7 +965,7 @@ function GB:Rebuild()
             card.total:SetShown(expanded)
             card.buffs:SetShown(expanded)
             card:Show()
-            y = y + card:GetHeight() + 6
+            y = y + card:GetHeight() + PAD
         else
             if card then
                 card:Hide()
@@ -866,14 +980,14 @@ function GB:Rebuild()
         self:EnsureProfitRows(profitRowCount)
         self:SetPanelExpanded(self.profitPanel, self.db.modules.profitExpanded)
         self.profitPanel:SetSize(W - PAD * 2, self.db.modules.profitExpanded and (HDR_H + 36 + (profitRowCount * 15) + PAD + 21) or HDR_H)
-        y = y + self.profitPanel:GetHeight() + PAD + 4
+        y = y + self.profitPanel:GetHeight() + PAD
     else
         self.profitPanel:Hide()
     end
     if self.mainTree then
         self.mainTree:SetHeight(y)
     end
-    self.mainFrame:SetSize(W, y + 4)
+    self.mainFrame:SetSize(W, y + 2)
     self:UpdateBars()
 end
 
@@ -888,17 +1002,17 @@ function GB:UpdateBars()
     local shardInfo = GB.GetShardOfDundunInfo()
     local shardEnabled = self.db.currencies and self.db.currencies.shard_of_dundun and self.db.currencies.shard_of_dundun.enabled ~= false
     if self.currencyPanel then
-        if shardInfo and shardEnabled and not self.db.modules.currenciesExpanded then
-            self.currencyPanel.summary:SetText(GB.FormatShardDisplayText(shardInfo, self:GetShardSpentThisWeek(shardInfo), true))
+        if shardInfo and shardEnabled and not self.db.modules.dundunExpanded then
+            self.currencyPanel.summary:SetText(GB.FormatShardDisplayText(shardInfo, self:GetShardSpentThisWeek(shardInfo), false))
         else
             self.currencyPanel.summary:SetText("")
         end
     end
-    if not inCombat and self.currencyShardRow and self.db.modules.currenciesExpanded and shardEnabled then
+    if not inCombat and self.currencyShardRow and self.db.modules.dundunExpanded and shardEnabled then
         ApplyCurrencyRow(self.currencyShardRow, shardInfo)
     end
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        local card, info = self.profCards and self.profCards[prof.id], self.profMap and self.profMap[prof.id]
+        local card, info = self.profCards and self.profCards[prof.id], self:GetProfessionDisplayInfo(prof.id)
         if card and info then
             local isFishing = prof.id == "fishing"
             card.title:SetText(info.label)
