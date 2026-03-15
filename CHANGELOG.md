@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.99.11
+
+- Added CurseForge project metadata and workflow secret wiring for automated CurseForge uploads on tagged releases
+- Fixed skinning profit tracking so valid skinning drops register again and removed the separate Skinning settings tab
+
 ## 0.99.10
 
 - Reworked profession, profit, currency, and fishing settings visibility so tabs and toggles only appear when relevant to the current character

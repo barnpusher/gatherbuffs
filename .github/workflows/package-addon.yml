@@ -25,6 +25,9 @@ jobs:
 
       - name: Package addon
         uses: BigWigsMods/packager@v2
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          GITHUB_OAUTH: ${{ github.token }}
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v6
