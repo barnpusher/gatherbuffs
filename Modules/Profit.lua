@@ -46,6 +46,7 @@ function GB:LoadSessionState()
                 link = item.link,
                 name = item.name,
                 count = item.count or 0,
+                activeCount = item.activeCount or item.count or 0,
                 firstSeen = item.firstSeen or self.sessionStart,
                 price = item.price,
                 quality = item.quality,
@@ -100,6 +101,7 @@ function GB:SaveSessionState()
                 link = item.link,
                 name = item.name,
                 count = item.count or 0,
+                activeCount = item.activeCount or item.count or 0,
                 firstSeen = item.firstSeen or self.sessionStart,
                 price = item.price,
                 quality = item.quality,
@@ -318,17 +320,20 @@ function GB:GetPrice(itemID)
     return nil
 end
 
-function GB:TrackLoot(itemID, amount, link)
+function GB:TrackLoot(itemID, amount, link, activeForProfit)
     if not itemID or not amount or amount <= 0 then
         return
     end
     local item = self.sessionLoot[itemID]
     if not item then
-        item = { itemID = itemID, name = link or ("item:" .. itemID), count = 0, firstSeen = time() }
+        item = { itemID = itemID, name = link or ("item:" .. itemID), count = 0, activeCount = 0, firstSeen = time() }
         self.sessionLoot[itemID] = item
         table.insert(self.sessionOrder, itemID)
     end
     item.count = item.count + amount
+    if activeForProfit ~= false then
+        item.activeCount = (item.activeCount or 0) + amount
+    end
     item.link = link or item.link
     item.price = self:GetPrice(itemID)
     self.gphDirty = true
@@ -359,6 +364,12 @@ end
 function GB:GetBagItemCount(itemID)
     local count = GetItemCount(itemID, false, false, false, false)
     return math.max(0, tonumber(count) or 0)
+end
+
+function GB:GetSessionBagDelta(itemID)
+    local current = self:GetBagItemCount(itemID)
+    local baseline = (self.sessionBaseline and self.sessionBaseline[itemID]) or 0
+    return math.max(0, current - baseline)
 end
 
 function GB:CaptureInventoryBaseline()
@@ -451,7 +462,7 @@ function GB:BuildVendorLootSummary()
     return totalValue, totalCount
 end
 
-function GB:BuildCurrentProfitGroups()
+function GB:BuildCurrentProfitGroups(includeBagFallback)
     local totalValue = 0
     local grouped = {}
     local groupOrder = {}
@@ -460,11 +471,17 @@ function GB:BuildCurrentProfitGroups()
 
     for itemID, lookupInfo in pairs(self.gatherLookup or {}) do
         if GB.IsGatheringMat(itemID, trackedProfMap, self.gatherLookup) then
-            local count = (self.sessionLoot and self.sessionLoot[itemID] and self.sessionLoot[itemID].count) or 0
-            if count > 0 then
+            local trackedItem = self.sessionLoot and self.sessionLoot[itemID]
+            local sessionCount = (trackedItem and trackedItem.activeCount) or 0
+            local visibleCount = (trackedItem and trackedItem.count) or 0
+            if includeBagFallback and visibleCount <= 0 then
+                visibleCount = self:GetSessionBagDelta(itemID)
+            end
+            if visibleCount > 0 then
                 local item = {
                     itemID = itemID,
-                    count = count,
+                    count = visibleCount,
+                    sessionCount = sessionCount,
                     price = self:GetPrice(itemID),
                 }
                 local groupKey = lookupInfo and lookupInfo.name or ("__id_" .. itemID)
@@ -476,7 +493,7 @@ function GB:BuildCurrentProfitGroups()
                         or ("item:" .. itemID)
                 end
                 grouped[groupKey][#grouped[groupKey] + 1] = item
-                totalValue = totalValue + ((item.price or 0) * count)
+                totalValue = totalValue + ((item.price or 0) * sessionCount)
             end
         end
     end
@@ -491,7 +508,7 @@ end
 function GB:BuildProfitReportLines()
     local lines = {}
     local elapsed = self:GetActiveElapsed()
-    local grouped, groupOrder, groupDisplay, totalValue = self:BuildCurrentProfitGroups()
+    local grouped, groupOrder, groupDisplay, totalValue = self:BuildCurrentProfitGroups(false)
     local vendorValue, vendorCount = self:BuildVendorLootSummary()
     totalValue = totalValue + vendorValue
 
@@ -607,7 +624,7 @@ end
 
 function GB:UpdateProfit()
     local totalValue, rows = 0, {}
-    local byGroup, groupOrder, groupDisplay, groupedTotalValue = self:BuildCurrentProfitGroups()
+    local byGroup, groupOrder, groupDisplay, groupedTotalValue = self:BuildCurrentProfitGroups(true)
     local vendorValue, vendorCount = self:BuildVendorLootSummary()
     totalValue = (groupedTotalValue or 0) + vendorValue
 
@@ -1124,9 +1141,11 @@ function GB:HandleLoot(msg)
             if countsForProfit and isVendorItem then
                 self:TrackVendorLoot(itemID, amount, itemLink)
             end
+            if isGatherMat then
+                self:TrackLoot(itemID, amount, itemLink, countsForProfit)
+            end
             if isGatherMat and countsForProfit then
                 self:TrackVendorLoot(itemID, amount, itemLink)
-                self:TrackLoot(itemID, amount, itemLink)
                 local name = GetItemInfo(itemID) or "?"
                 self:AppendLootLog(string.format("%s  tracked  id=%-8d  x%-3d  %s", date("%H:%M:%S"), itemID, amount, name))
                 if self.lootDebug then
@@ -1162,16 +1181,16 @@ function GB:ProcessPendingLoot()
     if not self.pendingLoot or #self.pendingLoot == 0 then
         return
     end
-    if self.sessionPaused then
-        return
-    end
     local trackedProfMap = self:GetTrackedProfitProfessionMap()
     local remaining, tracked = {}, false
     for _, entry in ipairs(self.pendingLoot) do
         if GetItemInfo(entry.itemID) then
             if GB.IsGatheringMat(entry.itemID, trackedProfMap, self.gatherLookup) then
-                self:TrackLoot(entry.itemID, entry.amount, entry.link)
-                tracked = true
+                local activeForProfit = not self.sessionPaused
+                self:TrackLoot(entry.itemID, entry.amount, entry.link, activeForProfit)
+                if activeForProfit then
+                    tracked = true
+                end
             end
         else
             table.insert(remaining, entry)
