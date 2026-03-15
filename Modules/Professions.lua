@@ -9,7 +9,14 @@ function GB:IsProfessionAvailable(profID)
     if profID == "fishing" then
         return self:HasFishingProfession() or self.hasFishing == true or (self.profMap and self.profMap[profID] ~= nil)
     end
-    return self.profMap and self.profMap[profID] ~= nil
+    if self.profMap and self.profMap[profID] ~= nil then
+        return true
+    end
+    local profDef = GB.GetProfDef and GB.GetProfDef(profID)
+    if profDef and profDef.find then
+        return GB.HasProfessionByName(profDef.find)
+    end
+    return false
 end
 
 function GB:GetProfessionDisplayInfo(profID)
@@ -79,7 +86,10 @@ end
 function GB:GetTrackedProfitProfessionMap()
     local tracked = {}
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        if self:IsProfessionAvailable(prof.id) and self:IsProfessionModuleEnabled(prof.id) and self:IsProfitProfessionTracked(prof.id) then
+        local available = self:IsProfessionAvailable(prof.id)
+        if prof.id == "skinning" and self:IsProfitProfessionTracked(prof.id) then
+            tracked[prof.id] = true
+        elseif available and self:IsProfitProfessionTracked(prof.id) then
             tracked[prof.id] = true
         end
     end

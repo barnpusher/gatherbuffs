@@ -48,7 +48,7 @@ GATHERBUFFS_GATHER_ITEMS = {
         { name = "Void-Tempered Leather",    ids = { 238511, 238512 } },
         { name = "Void-Tempered Scales",     ids = { 238513, 238514 } },
         { name = "Void-Tempered Hide",       ids = { 238519 } },
-        { name = "Void-Tempered Plating",    ids = { 238521 } },
+        { name = "Void-Tempered Plating",    ids = { 238520, 238521 } },
         { name = "Scalewoven Hide",          ids = { 244631, 244633 } },
         { name = "Fantastic Fur",            ids = { 238525 } },
         { name = "Carving Canine",           ids = { 238523 } },

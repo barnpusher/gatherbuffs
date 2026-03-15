@@ -1110,7 +1110,8 @@ function GB:HandleLoot(msg)
         if itemID then
             local ignored = GATHERBUFFS_LOOT_IGNORE and GATHERBUFFS_LOOT_IGNORE[itemID]
             local isGatherMat = GB.IsGatheringMat(itemID, trackedProfMap, self.gatherLookup)
-            local countsForProfit = not ignored and (isGatherMat or self:ShouldIncludeVendorLootItem(itemID))
+            local isVendorItem = not ignored and self:ShouldIncludeVendorLootItem(itemID)
+            local countsForProfit = not ignored and (isGatherMat or isVendorItem)
             if countsForProfit then
                 self:MaybeAutoStartSession()
             end
@@ -1120,15 +1121,22 @@ function GB:HandleLoot(msg)
                 end
                 countsForProfit = false
             end
-            if countsForProfit then
+            if countsForProfit and isVendorItem then
                 self:TrackVendorLoot(itemID, amount, itemLink)
             end
             if isGatherMat and countsForProfit then
+                self:TrackVendorLoot(itemID, amount, itemLink)
                 self:TrackLoot(itemID, amount, itemLink)
                 local name = GetItemInfo(itemID) or "?"
                 self:AppendLootLog(string.format("%s  tracked  id=%-8d  x%-3d  %s", date("%H:%M:%S"), itemID, amount, name))
                 if self.lootDebug then
                     print("|cffaaffaaGB tracked:|r id=" .. itemID .. " x" .. amount)
+                end
+            elseif isGatherMat then
+                local name = GetItemInfo(itemID) or "?"
+                self:AppendLootLog(string.format("%s  skipped  id=%-8d  x%-3d  %s  (session paused)", date("%H:%M:%S"), itemID, amount, name))
+                if self.lootDebug then
+                    print("|cffaaffaaGB skipped:|r id=" .. itemID .. " x" .. amount .. " (session paused)")
                 end
             elseif not ignored then
                 if not GetItemInfo(itemID) then

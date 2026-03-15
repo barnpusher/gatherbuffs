@@ -396,7 +396,7 @@ function GB:BuildOptions()
         { id = "profit", label = "Profit" },
     }
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        if not prof.profitOnly then
+        if not prof.profitOnly and prof.id ~= "skinning" then
             table.insert(tabDefs, { id = "prof_" .. prof.id, label = prof.label, prof = prof })
         end
     end
@@ -605,7 +605,6 @@ function GB:BuildOptions()
     local profCatMap = {
         mining = { "weaponstone", "overload_mining" },
         herbalism = { "overload_herbalism" },
-        skinning = {},
         fishing = { "fishing", "fishing_chum" },
     }
     for _, td in ipairs(visibleTabDefs) do
