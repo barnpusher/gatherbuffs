@@ -27,12 +27,19 @@ function GB:IsProfitProfessionTracked(profID)
     return tracking[profID] ~= false
 end
 
+function GB:IsMidnightEnchantingProfitTracked()
+    return self:IsProfitProfessionTracked("midnight_enchanting")
+end
+
 function GB:GetTrackedProfitProfessionMap()
     local tracked = {}
     for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
         if self.profMap and self.profMap[prof.id] and self:IsProfessionModuleEnabled(prof.id) and self:IsProfitProfessionTracked(prof.id) then
             tracked[prof.id] = true
         end
+    end
+    if self:IsMidnightEnchantingProfitTracked() and GB.HasProfessionByName("Enchanting") then
+        tracked.midnight_enchanting = true
     end
     return tracked
 end

@@ -342,7 +342,9 @@ function GB:BuildCurrentProfitGroups()
 
     for itemID, lookupInfo in pairs(self.gatherLookup or {}) do
         if GB.IsGatheringMat(itemID, trackedProfMap, self.gatherLookup) then
-            local count = self:GetBagItemCount(itemID) - ((self.sessionBaseline and self.sessionBaseline[itemID]) or 0)
+            local bagDelta = self:GetBagItemCount(itemID) - ((self.sessionBaseline and self.sessionBaseline[itemID]) or 0)
+            local trackedLoot = ((self.sessionLoot and self.sessionLoot[itemID] and self.sessionLoot[itemID].count) or 0)
+            local count = math.min(math.max(0, bagDelta), math.max(0, trackedLoot))
             if count > 0 then
                 local item = {
                     itemID = itemID,

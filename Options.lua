@@ -496,6 +496,16 @@ function GB:BuildOptions()
             y = y - 24
         end
 
+        MakeBoolOptRow(pc, "Include Midnight enchanting mats", y,
+            function()
+                return GB:IsMidnightEnchantingProfitTracked()
+            end,
+            function(value)
+                GB.db.modules.profitTracking.midnight_enchanting = value and true or false
+                GB:UpdateProfit()
+            end)
+        y = y - 24
+
         local modeItems = {}
         for _, entry in ipairs(GB.PROFIT_PRICE_SOURCE_MODES) do
             modeItems[#modeItems + 1] = { label = entry.label, value = entry.id }

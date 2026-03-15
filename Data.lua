@@ -83,6 +83,10 @@ GATHERBUFFS_GATHER_ITEMS = {
         { name = "Sunfire Silk",  ids = { 237015, 237016 } },
         { name = "Arcanoweave",   ids = { 237018, 237017 } },
     },
+    midnight_enchanting = {
+        { name = "Eversinging Dust", ids = { 243599, 243600 } },
+        { name = "Radiant Shard",    ids = { 243602, 243603 } },
+    },
 }
 
 -- Ordering for displayed stats.  Entries map an identifier to a short label.

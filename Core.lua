@@ -39,6 +39,7 @@ GB.DEFAULTS = {
             skinning = true,
             fishing = true,
             tailoring = true,
+            midnight_enchanting = false,
         },
         mainCollapsed = false,
         professions = {

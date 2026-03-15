@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.99.9
+
+- Added a Profit-tab checkbox to include Midnight enchanting disenchant mats in profit tracking
+- Added Midnight enchanting material tracking for Eversinging Dust and Radiant Shard
+- Restricted profit totals and reports to tracked looted or disenchanted items still remaining in bags, excluding mailbox and AH additions
+
 ## 0.99.8
 
 - Moved profession stat summaries into the profession cards and kept the global buff section limited to shared buffs
