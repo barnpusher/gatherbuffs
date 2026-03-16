@@ -4,6 +4,7 @@
 
 - Added CurseForge project metadata and workflow secret wiring for automated CurseForge uploads on tagged releases
 - Fixed skinning profit tracking so valid skinning drops register again and removed the separate Skinning settings tab
+- Refactored profession handling into per-profession modules and moved profession-specific logic out of the shared professions module
 
 ## 0.99.10
 

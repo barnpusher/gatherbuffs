@@ -147,6 +147,7 @@ local function MakeOptRow(parent, cat, yTop)
 end
 
 local function MakeProfOptRow(parent, prof, yTop)
+    GB.db.modules.professions[prof.id] = GB.db.modules.professions[prof.id] or {}
     local db = GB.db.modules.professions[prof.id]
     local row = CreateFrame("Frame", nil, parent)
     row:SetPoint("TOPLEFT", PAD, yTop)
@@ -154,7 +155,7 @@ local function MakeProfOptRow(parent, prof, yTop)
 
     local cb = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
     cb:SetPoint("LEFT", 0, 0)
-    cb:SetChecked(db.enabled)
+    cb:SetChecked(db.enabled ~= false)
     cb:SetScript("OnClick", function(self)
         GB.db.modules.professions[prof.id].enabled = self:GetChecked()
         GB:Rebuild()
@@ -395,8 +396,8 @@ function GB:BuildOptions()
         { id = "currencies", label = "Currencies" },
         { id = "profit", label = "Profit" },
     }
-    for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        if not prof.profitOnly and prof.id ~= "skinning" then
+    for _, prof in ipairs(GB.GetProfessionDefs()) do
+        if prof.showSettingsTab then
             table.insert(tabDefs, { id = "prof_" .. prof.id, label = prof.label, prof = prof })
         end
     end
@@ -506,7 +507,7 @@ function GB:BuildOptions()
     do
         local pc = contentFrames.profit
         local y = 0
-        for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
+        for _, prof in ipairs(GB.GetProfessionDefs()) do
             if not prof.profitOnly and self:IsProfessionAvailable(prof.id) then
                 MakeBoolOptRow(pc, "Track " .. prof.label, y,
                     function()
@@ -521,29 +522,19 @@ function GB:BuildOptions()
             end
         end
 
-        if GB.HasProfessionByName("Tailoring") then
-            MakeBoolOptRow(pc, "Include Midnight cloth", y,
-                function()
-                    return GB:IsProfitProfessionTracked("tailoring")
-                end,
-                function(value)
-                    GB.db.modules.profitTracking.tailoring = value and true or false
-                    GB:CheckProfession()
-                    GB:UpdateProfit()
-                end)
-            y = y - 24
-        end
-
-        if GB.HasProfessionByName("Enchanting") then
-            MakeBoolOptRow(pc, "Include Midnight enchanting mats", y,
-                function()
-                    return GB:IsMidnightEnchantingProfitTracked()
-                end,
-                function(value)
-                    GB.db.modules.profitTracking.midnight_enchanting = value and true or false
-                    GB:UpdateProfit()
-                end)
-            y = y - 24
+        for _, prof in ipairs(GB.GetProfessionDefs()) do
+            if prof.profitOnly and self:IsProfessionAvailable(prof.id) then
+                MakeBoolOptRow(pc, prof.profitToggleLabel or ("Track " .. prof.label), y,
+                    function()
+                        return GB:IsProfitProfessionTracked(prof.id)
+                    end,
+                    function(value)
+                        GB.db.modules.profitTracking[prof.id] = value and true or false
+                        GB:CheckProfession()
+                        GB:UpdateProfit()
+                    end)
+                y = y - 24
+            end
         end
 
         MakeBoolOptRow(pc, "Include vendor loot value", y,
@@ -602,27 +593,11 @@ function GB:BuildOptions()
             end)
     end
 
-    local profCatMap = {
-        mining = { "weaponstone", "overload_mining" },
-        herbalism = { "overload_herbalism" },
-        fishing = { "fishing", "fishing_chum" },
-    }
     for _, td in ipairs(visibleTabDefs) do
         if td.prof then
             local pc = contentFrames[td.id]
             MakeProfOptRow(pc, td.prof, 0)
-            if td.prof.profitOnly then
-                MakeBoolOptRow(pc, "Track Midnight cloth profit", -28,
-                    function()
-                        return GB:IsProfitProfessionTracked(td.prof.id)
-                    end,
-                    function(value)
-                        GB.db.modules.profitTracking[td.prof.id] = value and true or false
-                        GB:CheckProfession()
-                        GB:UpdateProfit()
-                    end)
-            end
-            local catList = profCatMap[td.prof.id] or {}
+            local catList = td.prof:GetBuffCategoryIDs()
             for i, catID in ipairs(catList) do
                 local cat = GB.GetCatDef(catID)
                 if cat then

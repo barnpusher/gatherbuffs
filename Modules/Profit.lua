@@ -1091,14 +1091,14 @@ end
 
 function GB.BuildGatherLookup()
     local lookup = {}
-    for profID, entries in pairs(GATHERBUFFS_GATHER_ITEMS) do
-        for _, entry in ipairs(entries) do
+    for _, prof in ipairs(GB.GetProfessionDefs()) do
+        for _, entry in ipairs(prof.gatherItems or {}) do
             local totalTiers = #entry.ids
             for tier, itemID in ipairs(entry.ids) do
                 if not lookup[itemID] then
                     lookup[itemID] = { name = entry.name, profs = {}, entry = entry, tier = tier, totalTiers = totalTiers }
                 end
-                lookup[itemID].profs[profID] = true
+                lookup[itemID].profs[prof.id] = true
             end
         end
     end

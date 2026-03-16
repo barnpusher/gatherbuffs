@@ -19,91 +19,12 @@ GATHERBUFFS_LOOT_IGNORE = {
     [260620] = true,  -- Stone Droppings (misc node drop)
 }
 
--- Midnight gathering output items, keyed by profession.  Multi‑id entries
--- represent quality tiers (Q1 first, highest quality last).
-GATHERBUFFS_GATHER_ITEMS = {
-    mining = {
-        { name = "Refulgent Copper Ore",  ids = { 237359, 237361 } },
-        { name = "Umbral Tin Ore",        ids = { 237362, 237363 } },
-        { name = "Brilliant Silver Ore",  ids = { 237364, 237365 } },
-        { name = "Dazzling Thorium",      ids = { 237366 } },
-        { name = "Mote of Light",         ids = { 236949 } },
-        { name = "Mote of Primal Energy", ids = { 236950 } },
-        { name = "Mote of Wild Magic",    ids = { 236951 } },
-        { name = "Mote of Pure Void",     ids = { 236952 } },
-    },
-    herbalism = {
-        { name = "Tranquility Bloom",     ids = { 236761, 236767 } },
-        { name = "Argentleaf",            ids = { 236776, 236777 } },         -- verify: Q1 may be 236776
-        { name = "Azeroot",               ids = { 236774, 236775 } },         -- verify: Q1 may be 236774
-        { name = "Sanguithorn",           ids = { 236770, 236771 } },
-        { name = "Mana Lily",             ids = { 236778, 236779 } },
-        { name = "Nocturnal Lotus",       ids = { 236780 } },
-        { name = "Mote of Light",         ids = { 236949 } },
-        { name = "Mote of Primal Energy", ids = { 236950 } },
-        { name = "Mote of Wild Magic",    ids = { 236951 } },
-        { name = "Mote of Pure Void",     ids = { 236952 } },
-    },
-    skinning = {
-        { name = "Void-Tempered Leather",    ids = { 238511, 238512 } },
-        { name = "Void-Tempered Scales",     ids = { 238513, 238514 } },
-        { name = "Void-Tempered Hide",       ids = { 238519 } },
-        { name = "Void-Tempered Plating",    ids = { 238520, 238521 } },
-        { name = "Scalewoven Hide",          ids = { 244631, 244633 } },
-        { name = "Fantastic Fur",            ids = { 238525 } },
-        { name = "Carving Canine",           ids = { 238523 } },
-        { name = "Peerless Plumage",         ids = { 238522 } },
-        { name = "Majestic Claw",            ids = { 238528 } },
-        { name = "Majestic Fin",             ids = { 238530 } },
-        { name = "Majestic Hide",            ids = { 238529 } },
-    },
-    fishing = {
-        { name = "Arcane Wyrmfish",   ids = { 238371 } },
-        { name = "Gore Guppy",        ids = { 238382 } },
-        { name = "Lynxfish",          ids = { 238366 } },
-        { name = "Root Crab",         ids = { 238367 } },
-        { name = "Sin'dorei Swarmer", ids = { 238365 } },
-        { name = "Blood Hunter",      ids = { 238377 } },
-        { name = "Bloomtail Minnow",  ids = { 238369 } },
-        { name = "Fungalskin Pike",   ids = { 238375 } },
-        { name = "Restored Songfish", ids = { 238372 } },
-        { name = "Shimmer Spinefish", ids = { 238370 } },
-        { name = "Shimmersiren",      ids = { 238378 } },
-        { name = "Sunwell Fish",      ids = { 238384 } },
-        { name = "Tender Lumifin",    ids = { 238374 } },
-        { name = "Eversong Trout",    ids = { 238383 } },
-        { name = "Hollow Grouper",    ids = { 238381 } },
-        { name = "Lucky Loa",         ids = { 238376 } },
-        { name = "Null Voidfish",     ids = { 238380 } },
-        { name = "Ominous Octopus",   ids = { 238373 } },
-        { name = "Warping Wise",      ids = { 238379 } },
-    },
-    tailoring = {
-        { name = "Bright Linen",  ids = { 236963, 236965 } },
-        { name = "Sunfire Silk",  ids = { 237015, 237016 } },
-        { name = "Arcanoweave",   ids = { 237018, 237017 } },
-    },
-    midnight_enchanting = {
-        { name = "Eversinging Dust", ids = { 243599, 243600 } },
-        { name = "Radiant Shard",    ids = { 243602, 243603 } },
-    },
-}
-
 -- Ordering for displayed stats.  Entries map an identifier to a short label.
 GATHERBUFFS_STAT_ORDER = {
     { id = "finesse",    label = "Finesse"   },
     { id = "perception", label = "Percept." },
     { id = "deftness",   label = "Deftness"  },
     { id = "speedPct",   label = "Speed%"    },
-}
-
--- Profession metadata used for UI display and profession filtering.
-GATHERBUFFS_PROFESSIONS = {
-    { id = "mining",    label = "Mining",    find = "Mining"    },
-    { id = "herbalism", label = "Herbalism", find = "Herbalism" },
-    { id = "skinning",  label = "Skinning",  find = "Skinning"  },
-    { id = "fishing",   label = "Fishing",   find = "Fishing"   },
-    { id = "tailoring", label = "Tailoring", find = "Tailoring", profitOnly = true },
 }
 
 -- Category definitions.  Each category contains one or more buffs.  The

@@ -6,6 +6,52 @@ end
 _G.GatherBuffs = GB
 
 GB.ADDON_NAME = addonName or "GatherBuffs"
+GB.professionRegistry = GB.professionRegistry or {}
+GB.professionDefs = GB.professionDefs or {}
+
+function GB.RegisterProfession(def)
+    if type(def) ~= "table" or type(def.id) ~= "string" or def.id == "" then
+        error("GB.RegisterProfession requires a profession definition with a non-empty id")
+    end
+
+    if GB.ApplyProfessionBase then
+        GB.ApplyProfessionBase(def)
+    end
+
+    local existingIndex
+    for i, existing in ipairs(GB.professionDefs) do
+        if existing.id == def.id then
+            existingIndex = i
+            break
+        end
+    end
+
+    if existingIndex then
+        GB.professionDefs[existingIndex] = def
+    else
+        GB.professionDefs[#GB.professionDefs + 1] = def
+    end
+    GB.professionRegistry[def.id] = def
+    return def
+end
+
+function GB.GetProfessionDefs()
+    return GB.professionDefs
+end
+
+local function ResolveProfessionInfoAndDef(infoOrProfID, profMap)
+    local info = infoOrProfID
+    local profDef
+
+    if type(infoOrProfID) == "string" then
+        profDef = GB.GetProfDef(infoOrProfID)
+        info = (profMap and profMap[infoOrProfID]) or (GB.GetProfessionDisplayInfo and GB:GetProfessionDisplayInfo(infoOrProfID)) or nil
+    elseif type(infoOrProfID) == "table" and infoOrProfID.id then
+        profDef = GB.GetProfDef(infoOrProfID.id)
+    end
+
+    return info, profDef
+end
 
 GB.DEFAULTS = {
     locked = false,
@@ -44,7 +90,7 @@ GB.DEFAULTS = {
             skinning = true,
             fishing = true,
             tailoring = true,
-            midnight_enchanting = false,
+            enchanting = false,
         },
         mainCollapsed = false,
         professions = {
@@ -53,6 +99,7 @@ GB.DEFAULTS = {
             skinning = { enabled = true, expanded = true, desiredStat = "finesse" },
             fishing = { enabled = true, expanded = true },
             tailoring = { enabled = true, expanded = true },
+            enchanting = { enabled = true, expanded = true },
         },
     },
     session = {
@@ -304,11 +351,7 @@ function GB.GetCatDef(catID)
 end
 
 function GB.GetProfDef(profID)
-    for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        if prof.id == profID then
-            return prof
-        end
-    end
+    return GB.professionRegistry[profID]
 end
 
 function GB.GetBuffKey(catID, buff)
@@ -813,7 +856,7 @@ function GB.GetActiveProfessionVariantID(infoOrProfID, profMap)
     return GB.skillLineByDisplayName[info.currentSkillLineName]
 end
 
-function GB.GetProfessionBuffTotals(self, profID, activeOnly)
+function GB.GetProfessionBuffTotalsByID(self, profID, activeOnly)
     local totals = GB.MakeTotals()
     for _, cat in ipairs(GATHERBUFFS_CATEGORIES) do
         if cat.scope == "common" then
@@ -829,9 +872,32 @@ function GB.GetProfessionBuffTotals(self, profID, activeOnly)
     return totals
 end
 
-function GB.GetProfessionEquipmentTotals(infoOrProfID, profMap)
+function GB.GetProfessionEquipmentSlotsFromInfo(info)
+    if not info then
+        return nil
+    end
+    if info.professionSlotIndex == 1 then
+        return { tool = 20, accessories = { 21, 22 } }
+    end
+    if info.professionSlotIndex == 2 then
+        return { tool = 23, accessories = { 24, 25 } }
+    end
+    if info.professionSlotIndex == "fishing" then
+        return { tool = 28, accessories = {} }
+    end
+    if info.professionSlotIndex == "cooking" then
+        return { tool = 26, accessories = { 27 } }
+    end
+    return nil
+end
+
+function GB.GetInventorySlotStats(slotID)
+    return ScanEquippedItemStats(slotID)
+end
+
+function GB.GetProfessionEquipmentTotalsFromInfo(info)
     local totals = GB.MakeTotals()
-    local slots = GB.GetProfessionEquipmentSlots(infoOrProfID, profMap)
+    local slots = GB.GetProfessionEquipmentSlotsFromInfo(info)
     if not slots then
         return totals
     end
@@ -845,15 +911,11 @@ function GB.GetProfessionEquipmentTotals(infoOrProfID, profMap)
     return totals
 end
 
-function GB.GetProfessionApiTotals(infoOrProfID, profMap)
+function GB.GetProfessionApiTotalsFromInfo(info, profMap)
     if not (C_TradeSkillUI and C_TradeSkillUI.GetProfessionInfoBySkillLineID) then
         return nil
     end
 
-    local info = infoOrProfID
-    if type(infoOrProfID) == "string" then
-        info = profMap and profMap[infoOrProfID]
-    end
     if not info then
         return nil
     end
@@ -884,15 +946,14 @@ function GB.GetProfessionApiTotals(infoOrProfID, profMap)
     return nil
 end
 
-function GB:GetProfessionStatSnapshot(profID)
-    local info = self.profMap and self.profMap[profID]
+function GB.BuildProfessionStatSnapshot(self, profID, info)
     if not info then
         return nil
     end
 
-    local activeBuffs = GB.GetProfessionBuffTotals(self, profID, true)
-    local maxBuffs = GB.GetProfessionBuffTotals(self, profID, false)
-    local liveTotals = GB.GetProfessionApiTotals(info, self.profMap)
+    local activeBuffs = GB.GetProfessionBuffTotalsByID(self, profID, true)
+    local maxBuffs = GB.GetProfessionBuffTotalsByID(self, profID, false)
+    local liveTotals = GB.GetProfessionApiTotalsFromInfo(info, self.profMap)
     local current = GB.MakeTotals()
     local max = GB.MakeTotals()
 
@@ -901,7 +962,7 @@ function GB:GetProfessionStatSnapshot(profID)
         AddTotalsInto(max, liveTotals)
         AddTotalsInto(max, SubtractTotals(maxBuffs, activeBuffs))
     else
-        local baseline = GB.GetProfessionEquipmentTotals(info, self.profMap)
+        local baseline = GB.GetProfessionEquipmentTotalsFromInfo(info)
         AddTotalsInto(current, baseline)
         AddTotalsInto(max, baseline)
         AddTotalsInto(current, activeBuffs)
@@ -930,29 +991,29 @@ function GB.SnapshotProfessions()
         if idx then
             local name, icon, skill, maxSkill, _, _, skillLineID, bonus, _, _, currentSkillLineName = GetProfessionInfo(idx)
             if name then
-                for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-                    if name:find(prof.find, 1, true) and not map[prof.id] then
-                        local info = {
-                            id = prof.id,
-                            label = prof.label,
+                for _, prof in ipairs(GB.GetProfessionDefs()) do
+                    if prof:MatchesName(name) and not map[prof.id] then
+                        local professionSlotIndex
+                        if idx == primary1 then
+                            professionSlotIndex = 1
+                        elseif idx == primary2 then
+                            professionSlotIndex = 2
+                        elseif idx == fishing then
+                            professionSlotIndex = "fishing"
+                        elseif idx == cooking then
+                            professionSlotIndex = "cooking"
+                        end
+                        local info = prof:BuildSnapshotInfo({
+                            name = name,
                             icon = icon,
-                            skill = skill or 0,
-                            maxSkill = maxSkill or 0,
-                            bonus = bonus or 0,
+                            skill = skill,
+                            maxSkill = maxSkill,
                             skillLineID = skillLineID,
+                            bonus = bonus,
                             currentSkillLineName = currentSkillLineName,
                             professionIndex = idx,
-                        }
-                        info.total = info.skill + info.bonus
-                        if idx == primary1 then
-                            info.professionSlotIndex = 1
-                        elseif idx == primary2 then
-                            info.professionSlotIndex = 2
-                        elseif idx == fishing then
-                            info.professionSlotIndex = "fishing"
-                        elseif idx == cooking then
-                            info.professionSlotIndex = "cooking"
-                        end
+                            professionSlotIndex = professionSlotIndex,
+                        })
                         map[prof.id] = info
                         table.insert(order, info)
                     end
@@ -964,26 +1025,11 @@ function GB.SnapshotProfessions()
 end
 
 function GB.GetProfessionEquipmentSlots(infoOrProfID, profMap)
-    local info = infoOrProfID
-    if type(infoOrProfID) == "string" then
-        info = profMap and profMap[infoOrProfID]
-    end
-    if not info then
+    local info, profDef = ResolveProfessionInfoAndDef(infoOrProfID, profMap)
+    if not (profDef and info) then
         return nil
     end
-    if info.professionSlotIndex == 1 then
-        return { tool = 20, accessories = { 21, 22 } }
-    end
-    if info.professionSlotIndex == 2 then
-        return { tool = 23, accessories = { 24, 25 } }
-    end
-    if info.professionSlotIndex == "fishing" then
-        return { tool = 28, accessories = {} }
-    end
-    if info.professionSlotIndex == "cooking" then
-        return { tool = 26, accessories = { 27 } }
-    end
-    return nil
+    return profDef:GetEquipmentSlots(GB, info)
 end
 
 function GB.GetItemLinkEnchantID(itemLink)
@@ -998,8 +1044,8 @@ function GB.GetItemLinkEnchantID(itemLink)
     return nil
 end
 
-function GB.GetProfessionToolEnchantInfo(infoOrProfID, profMap)
-    local slots = GB.GetProfessionEquipmentSlots(infoOrProfID, profMap)
+function GB.GetProfessionToolEnchantInfoFromInfo(info)
+    local slots = GB.GetProfessionEquipmentSlotsFromInfo(info)
     if not slots or not slots.tool then
         return nil
     end
@@ -1028,6 +1074,38 @@ function GB.GetProfessionToolEnchantInfo(infoOrProfID, profMap)
         enchantName = enchantName,
         itemLink = itemLink,
     }
+end
+
+function GB.GetProfessionToolEnchantInfo(infoOrProfID, profMap)
+    local info, profDef = ResolveProfessionInfoAndDef(infoOrProfID, profMap)
+    if not (profDef and info) then
+        return nil
+    end
+    return profDef:GetToolEnchantInfo(GB, info)
+end
+
+function GB.GetProfessionEquipmentTotals(infoOrProfID, profMap)
+    local info, profDef = ResolveProfessionInfoAndDef(infoOrProfID, profMap)
+    if not (profDef and info) then
+        return GB.MakeTotals()
+    end
+    return profDef:GetEquipmentTotals(GB, info)
+end
+
+function GB.GetProfessionApiTotals(infoOrProfID, profMap)
+    local info, profDef = ResolveProfessionInfoAndDef(infoOrProfID, profMap)
+    if not (profDef and info) then
+        return nil
+    end
+    return profDef:GetApiTotals(GB, info)
+end
+
+function GB:GetProfessionStatSnapshot(profID)
+    local profDef = GB.GetProfDef(profID)
+    if not profDef then
+        return nil
+    end
+    return profDef:GetStatSnapshot(self)
 end
 
 function GB.HasProfessionByName(findText)

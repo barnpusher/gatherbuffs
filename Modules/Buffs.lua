@@ -1,22 +1,20 @@
 local _, GB = ...
 
-local function CheckEquipped(cat, buff)
+local function CheckEquipped(cat, buff, profID)
     if not cat.equippedGear then
         return nil
     end
     if cat.id == "weaponstone" then
-        for _, profID in ipairs({ "mining", "herbalism" }) do
-            local info = GB.GetProfessionDisplayInfo and GB:GetProfessionDisplayInfo(profID)
-            if info then
-                local enchantInfo = GB.GetProfessionToolEnchantInfo(info)
-                if enchantInfo and enchantInfo.hasEnchant then
-                    local enchantName = enchantInfo.enchantName
-                    if enchantInfo.enchantID and buff and buff.spellID and enchantInfo.enchantID == buff.spellID then
-                        return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
-                    end
-                    if enchantName and enchantName ~= "" and buff and buff.name and enchantName:find(buff.name, 1, true) then
-                        return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
-                    end
+        local info = GB.GetProfessionDisplayInfo and GB:GetProfessionDisplayInfo(profID)
+        if info then
+            local enchantInfo = GB.GetProfessionToolEnchantInfo(info)
+            if enchantInfo and enchantInfo.hasEnchant then
+                local enchantName = enchantInfo.enchantName
+                if enchantInfo.enchantID and buff and buff.spellID and enchantInfo.enchantID == buff.spellID then
+                    return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
+                end
+                if enchantName and enchantName ~= "" and buff and buff.name and enchantName:find(buff.name, 1, true) then
+                    return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
                 end
             end
         end
@@ -39,6 +37,13 @@ end
 
 function GB:MigrateDB()
     if self.db and self.db.modules then
+        local tracking = self.db.modules.profitTracking
+        if tracking and tracking.enchanting == nil and tracking.midnight_enchanting ~= nil then
+            tracking.enchanting = tracking.midnight_enchanting and true or false
+        end
+        if tracking then
+            tracking.midnight_enchanting = nil
+        end
         if self.db.modules.dundunExpanded == nil then
             if self.db.modules.currenciesExpanded ~= nil then
                 self.db.modules.dundunExpanded = self.db.modules.currenciesExpanded and true or false
@@ -186,7 +191,7 @@ function GB:GetRowBuff(catID, profID)
         if not buff then
             return nil, nil
         end
-        local aura = GB.GetPlayerAura(buff.spellID) or CheckEquipped(cat, buff)
+        local aura = GB.GetPlayerAura(buff.spellID) or CheckEquipped(cat, buff, profID)
         return buff, aura
     end
     local selected, fallback = self:GetSelectedBuff(catID), nil
@@ -195,7 +200,7 @@ function GB:GetRowBuff(catID, profID)
             if not fallback or (selected and GB.GetBuffKey(catID, buff) == GB.GetBuffKey(catID, selected)) then
                 fallback = buff
             end
-            local aura = GB.GetPlayerAura(buff.spellID) or CheckEquipped(cat, buff)
+            local aura = GB.GetPlayerAura(buff.spellID) or CheckEquipped(cat, buff, profID)
             if aura then
                 return buff, aura
             end

@@ -31,9 +31,9 @@ end
 
 function GB:CheckProfession()
     self.profMap, self.profOrder = GB.SnapshotProfessions()
-    self.hasFishing = self:HasFishingProfession() or GB.HasProfessionByName("Fishing")
+    self.hasFishing = self:HasFishingProfession()
     self.hasProfitProfession = false
-    for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
+    for _, prof in ipairs(GB.GetProfessionDefs()) do
         if self:IsProfessionAvailable(prof.id) and self:IsProfitProfessionTracked(prof.id) then
             self.hasProfitProfession = true
             break
@@ -216,16 +216,17 @@ SlashCmdList.GATHERBUFFS = function(msg)
 
         L("")
         L("=== Equipped profession tools & accessories ===")
-        for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-            local info = GB.profMap and GB.profMap[prof.id]
+        for _, prof in ipairs(GB.GetProfessionDefs()) do
+            local vitals = prof:GetVitals(GB)
+            local info = vitals and vitals.info or nil
             if info then
-                local slots = GB.GetProfessionEquipmentSlots(info)
-                if slots and slots.tool then
-                    local toolID = GetInventoryItemID("player", slots.tool)
+                local slots = vitals.slots
+                if vitals.tool then
+                    local toolID = vitals.tool.itemID
                     if toolID then
                         local name = GetItemInfo(toolID)
                         L(string.format("  %s Tool: id=%-8d  %s", info.label, toolID, name or "?"))
-                        local enchantInfo = GB.GetProfessionToolEnchantInfo(info)
+                        local enchantInfo = vitals.toolEnchant
                         if enchantInfo and enchantInfo.hasEnchant then
                             L(string.format("  %s Tool Enchant: id=%-8d  %s", info.label, enchantInfo.enchantID, enchantInfo.enchantName or "?"))
                         else
@@ -235,8 +236,8 @@ SlashCmdList.GATHERBUFFS = function(msg)
                         L(string.format("  %s Tool: none", info.label))
                     end
                 end
-                for index, slot in ipairs((slots and slots.accessories) or {}) do
-                    local itemID = GetInventoryItemID("player", slot)
+                for index, accessory in ipairs(vitals.accessories or {}) do
+                    local itemID = accessory.itemID
                     if itemID then
                         local name = GetItemInfo(itemID)
                         L(string.format("  %s Accessory %d: id=%-8d  %s", info.label, index, itemID, name or "?"))

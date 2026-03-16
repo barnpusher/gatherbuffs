@@ -560,8 +560,8 @@ function GB:BuildStaticUI()
     self.currencyShardRow:Hide()
 
     self.profCards = {}
-    for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        if not prof.profitOnly then
+    for _, prof in ipairs(GB.GetProfessionDefs()) do
+        if not prof.profitOnly and prof.mainCard ~= false then
             local card = MakePanel(self.mainTree, prof.label)
             card.profID = prof.id
             self:ConfigurePanel(card, self:IsProfessionExpanded(prof.id), function()
@@ -587,8 +587,10 @@ function GB:BuildStaticUI()
             card.nodes:SetTextColor(0.62, 0.68, 0.74)
             local overloadCatDef = GB.GetCatDef("overload_" .. prof.id)
             card.overload = overloadCatDef and MakeRow(card.content, overloadCatDef) or nil
-            if prof.id == "mining" then
+            if prof.weaponstone then
                 card.weaponstone = MakeRow(card.content, GB.GetCatDef("weaponstone"), prof.id)
+            end
+            if prof.toolDetails then
                 card.tool = MakeInfoRow(card.content)
                 card.tool.lbl:SetText("Tool")
                 card.enchant = MakeInfoRow(card.content)
@@ -830,7 +832,7 @@ end
 function GB:Rebuild()
     self.profMap, self.profOrder = GB.SnapshotProfessions()
     self.hasProfitProfession = false
-    for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
+    for _, prof in ipairs(GB.GetProfessionDefs()) do
         if self:IsProfessionAvailable(prof.id) and self:IsProfessionModuleEnabled(prof.id) and self:IsProfitProfessionTracked(prof.id) then
             self.hasProfitProfession = true
             break
@@ -899,7 +901,7 @@ function GB:Rebuild()
         self.currencyShardRow:Hide()
     end
 
-    for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
+    for _, prof in ipairs(GB.GetProfessionDefs()) do
         local card, info = self.profCards[prof.id], self:GetProfessionDisplayInfo(prof.id)
         if card and info and self:IsProfessionModuleEnabled(prof.id) then
             local nodeText = GB.GetNodeSkillSummary(prof.id)
@@ -1011,8 +1013,10 @@ function GB:UpdateBars()
     if not inCombat and self.currencyShardRow and self.db.modules.dundunExpanded and shardEnabled then
         ApplyCurrencyRow(self.currencyShardRow, shardInfo)
     end
-    for _, prof in ipairs(GATHERBUFFS_PROFESSIONS) do
-        local card, info = self.profCards and self.profCards[prof.id], self:GetProfessionDisplayInfo(prof.id)
+    for _, prof in ipairs(GB.GetProfessionDefs()) do
+        local card = self.profCards and self.profCards[prof.id]
+        local vitals = card and prof:GetVitals(self) or nil
+        local info = vitals and vitals.info or nil
         if card and info then
             local isFishing = prof.id == "fishing"
             card.title:SetText(info.label)
@@ -1026,7 +1030,7 @@ function GB:UpdateBars()
             end
             card.skill:SetText(string.format("Raw skill: %d / %d", info.skill, info.maxSkill))
             card.total:SetText(string.format("Current total: %d (%+d equipped bonus)", info.total, info.bonus))
-            card.buffs:SetText(FormatProfessionStatSummary(inCombat and nil or self:GetProfessionStatSnapshot(prof.id)))
+            card.buffs:SetText(FormatProfessionStatSummary(inCombat and nil or vitals.statSnapshot))
             local nodeText = GB.GetNodeSkillSummary(prof.id)
             if nodeText and nodeText ~= "" then
                 card.nodes:SetText(nodeText)
@@ -1041,8 +1045,7 @@ function GB:UpdateBars()
                 ApplyRow(card.weaponstone, self:GetRowBuff("weaponstone", prof.id))
             end
             if card.tool then
-                local slots = GB.GetProfessionEquipmentSlots(info)
-                local toolID = slots and slots.tool and GetInventoryItemID("player", slots.tool)
+                local toolID = vitals.tool and vitals.tool.itemID
                 if toolID then
                     local itemName = GetItemInfo(toolID)
                     local isMidnightTool = GATHERBUFFS_MINING_TOOLS and GATHERBUFFS_MINING_TOOLS[toolID]
@@ -1056,7 +1059,7 @@ function GB:UpdateBars()
                 end
             end
             if card.enchant then
-                local enchantInfo = GB.GetProfessionToolEnchantInfo(info)
+                local enchantInfo = vitals.toolEnchant
                 if enchantInfo and enchantInfo.hasEnchant then
                     local label = enchantInfo.enchantName or ("Enchant ID " .. enchantInfo.enchantID)
                     card.enchant.val:SetText("|cff00ee44" .. label .. "|r")

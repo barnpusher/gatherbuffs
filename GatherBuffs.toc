@@ -9,6 +9,13 @@
 
 Data.lua
 Core.lua
+Modules\ProfessionBase.lua
+Modules\Mining.lua
+Modules\Herbalism.lua
+Modules\Skinning.lua
+Modules\Fishing.lua
+Modules\Tailoring.lua
+Modules\Enchanting.lua
 Modules\Buffs.lua
 Modules\Professions.lua
 Modules\Profit.lua
