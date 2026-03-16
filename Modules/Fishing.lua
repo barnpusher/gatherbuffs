@@ -4,9 +4,18 @@ local Fishing = GB.RegisterProfession({
     id = "fishing",
     label = "Fishing",
     find = "Fishing",
+    simpleSkillSummary = true,
+    supportsDesiredStatSelection = false,
     optionCategories = { "fishing", "fishing_chum" },
     mainCard = true,
     showSettingsTab = true,
+    midnightGear = {
+        tools = {
+        },
+        accessories = {
+            "Elegant Artisan's Fishing Hat",
+        },
+    },
     gatherItems = {
         { name = "Arcane Wyrmfish",   ids = { 238371 } },
         { name = "Gore Guppy",        ids = { 238382 } },

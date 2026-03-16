@@ -297,16 +297,14 @@ function GB:ApplyUiSettings()
     end
     ApplyRowTextAlpha(self.currencyShardRow)
     for _, panel in pairs(self.profCards or {}) do
-        ApplyRowTextAlpha(panel.overload)
-        ApplyRowTextAlpha(panel.weaponstone)
+        for _, row in pairs(panel.buffRows or {}) do
+            ApplyRowTextAlpha(row)
+            if row.barBG then
+                SetBarTextureAlpha(row.barBG, 0.08, 0.08, 0.10, 0.88)
+            end
+        end
         ApplyRowTextAlpha(panel.tool)
         ApplyRowTextAlpha(panel.enchant)
-        if panel.overload then
-            SetBarTextureAlpha(panel.overload.barBG, 0.08, 0.08, 0.10, 0.88)
-        end
-        if panel.weaponstone then
-            SetBarTextureAlpha(panel.weaponstone.barBG, 0.08, 0.08, 0.10, 0.88)
-        end
     end
     for _, row in ipairs(self.profitRows or {}) do
         ApplyRowTextAlpha(row)
@@ -561,8 +559,8 @@ function GB:BuildStaticUI()
 
     self.profCards = {}
     for _, prof in ipairs(GB.GetProfessionDefs()) do
-        if not prof.profitOnly and prof.mainCard ~= false then
-            local card = MakePanel(self.mainTree, prof.label)
+        if prof:HasMainCard() then
+            local card = MakePanel(self.mainTree, prof:GetLabel())
             card.profID = prof.id
             self:ConfigurePanel(card, self:IsProfessionExpanded(prof.id), function()
                 GB:SetProfessionExpanded(prof.id, not GB:IsProfessionExpanded(prof.id))
@@ -585,12 +583,15 @@ function GB:BuildStaticUI()
             card.nodes:SetWidth(W - PAD * 4)
             card.nodes:SetJustifyH("LEFT")
             card.nodes:SetTextColor(0.62, 0.68, 0.74)
-            local overloadCatDef = GB.GetCatDef("overload_" .. prof.id)
-            card.overload = overloadCatDef and MakeRow(card.content, overloadCatDef) or nil
-            if prof.weaponstone then
-                card.weaponstone = MakeRow(card.content, GB.GetCatDef("weaponstone"), prof.id)
+            card.buffRows = {}
+            card.buffRowDefs = prof:GetMainCardBuffRowDefs()
+            for _, rowDef in ipairs(card.buffRowDefs) do
+                local catDef = GB.GetCatDef(rowDef.catID)
+                if catDef then
+                    card.buffRows[rowDef.key] = MakeRow(card.content, catDef, rowDef.profScoped and prof.id or nil)
+                end
             end
-            if prof.toolDetails then
+            if prof:ShowsToolDetails() then
                 card.tool = MakeInfoRow(card.content)
                 card.tool.lbl:SetText("Tool")
                 card.enchant = MakeInfoRow(card.content)
@@ -907,34 +908,23 @@ function GB:Rebuild()
             local nodeText = GB.GetNodeSkillSummary(prof.id)
             local showNodes = nodeText and nodeText ~= ""
             local expanded = self:IsProfessionExpanded(prof.id)
-            local isFishing = prof.id == "fishing"
             card:SetPoint("TOPLEFT", self.mainTree, "TOPLEFT", PAD, -y)
             self:SetPanelExpanded(card, expanded)
 
-            local rowY = isFishing and 56 or (showNodes and 72 or 56)
-            local overloadCatID = "overload_" .. prof.id
-            local overloadEnabled = card.overload and self.db.categories[overloadCatID] and self.db.categories[overloadCatID].enabled
-            local wsEnabled = card.weaponstone and self.db.categories.weaponstone and self.db.categories.weaponstone.enabled
-
-            if card.overload then
-                card.overload:ClearAllPoints()
-                card.overload:SetPoint("TOPLEFT", card.content, "TOPLEFT", PAD, -rowY)
-                card.overload:SetWidth(W - PAD * 4)
-                card.overload:SetHeight(ROW_H)
-                card.overload:SetShown(expanded and overloadEnabled)
-            end
-            if overloadEnabled then
-                rowY = rowY + ROW_H + 4
-            end
-
-            if card.weaponstone then
-                card.weaponstone:ClearAllPoints()
-                card.weaponstone:SetPoint("TOPLEFT", card.content, "TOPLEFT", PAD, -rowY)
-                card.weaponstone:SetWidth(W - PAD * 4)
-                card.weaponstone:SetHeight(ROW_H)
-                card.weaponstone:SetShown(expanded and wsEnabled)
-                if wsEnabled then
-                    rowY = rowY + ROW_H + 4
+            local rowY = prof:UsesSimpleSkillSummary() and 56 or (showNodes and 72 or 56)
+            for _, rowDef in ipairs(card.buffRowDefs or {}) do
+                local row = card.buffRows and card.buffRows[rowDef.key]
+                local catDB = self.db.categories[rowDef.catID]
+                local rowEnabled = row and catDB and catDB.enabled
+                if row then
+                    row:ClearAllPoints()
+                    row:SetPoint("TOPLEFT", card.content, "TOPLEFT", PAD, -rowY)
+                    row:SetWidth(W - PAD * 4)
+                    row:SetHeight(ROW_H)
+                    row:SetShown(expanded and rowEnabled)
+                    if rowEnabled then
+                        rowY = rowY + ROW_H + 4
+                    end
                 end
             end
 
@@ -1018,16 +1008,8 @@ function GB:UpdateBars()
         local vitals = card and prof:GetVitals(self) or nil
         local info = vitals and vitals.info or nil
         if card and info then
-            local isFishing = prof.id == "fishing"
             card.title:SetText(info.label)
-            local weeklyItemsText = GB.GetProfessionWeeklyItemText(prof.id)
-            if isFishing then
-                card.summary:SetText(string.format("%d/%d", info.skill, info.maxSkill))
-            elseif weeklyItemsText and weeklyItemsText ~= "" then
-                card.summary:SetText(string.format("%s   %d/%d", weeklyItemsText, info.skill, info.maxSkill))
-            else
-                card.summary:SetText(string.format("%d/%d", info.skill, info.maxSkill))
-            end
+            card.summary:SetText(prof:GetCardSummaryText(self, vitals))
             card.skill:SetText(string.format("Raw skill: %d / %d", info.skill, info.maxSkill))
             card.total:SetText(string.format("Current total: %d (%+d equipped bonus)", info.total, info.bonus))
             card.buffs:SetText(FormatProfessionStatSummary(inCombat and nil or vitals.statSnapshot))
@@ -1038,11 +1020,13 @@ function GB:UpdateBars()
             else
                 card.nodes:Hide()
             end
-            if card.overload and not inCombat then
-                ApplyRow(card.overload, self:GetRowBuff("overload_" .. prof.id))
-            end
-            if card.weaponstone and not inCombat then
-                ApplyRow(card.weaponstone, self:GetRowBuff("weaponstone", prof.id))
+            if not inCombat then
+                for _, rowDef in ipairs(card.buffRowDefs or {}) do
+                    local row = card.buffRows and card.buffRows[rowDef.key]
+                    if row then
+                        ApplyRow(row, self:GetRowBuff(rowDef.catID, rowDef.profScoped and prof.id or nil))
+                    end
+                end
             end
             if card.tool then
                 local toolID = vitals.tool and vitals.tool.itemID

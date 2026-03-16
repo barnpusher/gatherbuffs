@@ -9,6 +9,21 @@ GB.RegisterProfession({
     showSettingsTab = true,
     toolDetails = true,
     weaponstone = true,
+    midnightGear = {
+        tools = {
+            "Thalassian Pickaxe",
+            "Sun-Blessed Pickaxe",
+            "Sunforged Pickaxe",
+        },
+        accessories = {
+            "Farstrider Rock Satchel",
+            "Junker's Big Ol' Bag",
+            "Heavy-Duty Rock Assister",
+            "Farstrider Hardhat",
+            "Sin'dorei Gilded Hardhat",
+            "Rock Bonkin' Hardhat",
+        },
+    },
     gatherItems = {
         { name = "Refulgent Copper Ore",  ids = { 237359, 237361 } },
         { name = "Umbral Tin Ore",        ids = { 237362, 237363 } },

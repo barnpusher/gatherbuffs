@@ -7,6 +7,20 @@ GB.RegisterProfession({
     mainCard = true,
     showSettingsTab = false,
     trackProfitWithoutAvailability = true,
+    midnightGear = {
+        tools = {
+            "Thalassian Skinning Knife",
+            "Sunforged Skinning Knife",
+        },
+        accessories = {
+            "Eversong Hunter's Headcover",
+            "Thalassian Skinner's Stridercap",
+            "Sunforged Skinner's Stridercap",
+            "Sin'dorei Hunter's Pack",
+            "Thalassian Wildseeker's Workbag",
+            "Sunforged Wildseeker's Workbag",
+        },
+    },
     gatherItems = {
         { name = "Void-Tempered Leather", ids = { 238511, 238512 } },
         { name = "Void-Tempered Scales",  ids = { 238513, 238514 } },

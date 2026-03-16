@@ -774,6 +774,31 @@ local function ReadTooltipDataLine(line, totals)
     end
 end
 
+local function ReadTooltipProfessionLine(line, tags)
+    if not line then
+        return
+    end
+
+    if (not line.leftText and not line.rightText) and TooltipUtil and TooltipUtil.SurfaceArgs then
+        pcall(TooltipUtil.SurfaceArgs, line)
+    end
+
+    local leftText = type(line.leftText) == "string" and line.leftText:lower() or nil
+    local rightText = type(line.rightText) == "string" and line.rightText:lower() or nil
+    for _, prof in ipairs(GB.GetProfessionDefs()) do
+        local label = prof:GetLabel():lower()
+        local find = type(prof.find) == "string" and prof.find:lower() or label
+        if (leftText and (leftText:find(label, 1, true) or leftText:find(find, 1, true)))
+            or (rightText and (rightText:find(label, 1, true) or rightText:find(find, 1, true))) then
+            tags[prof.id] = true
+        end
+    end
+
+    for _, child in ipairs(line.lines or {}) do
+        ReadTooltipProfessionLine(child, tags)
+    end
+end
+
 local function ScanEquippedItemStats(slotID)
     local totals = GB.MakeTotals()
     if not slotID or not GetInventoryItemLink("player", slotID) then
@@ -807,6 +832,62 @@ local function ScanEquippedItemStats(slotID)
 
     tip:Hide()
     return totals
+end
+
+local function ScanItemStatsFromLink(itemLink)
+    local totals = GB.MakeTotals()
+    if not itemLink or itemLink == "" then
+        return totals
+    end
+
+    if C_TooltipInfo and C_TooltipInfo.GetHyperlink then
+        local ok, data = pcall(C_TooltipInfo.GetHyperlink, itemLink)
+        if ok and data and data.lines then
+            for _, line in ipairs(data.lines) do
+                ReadTooltipDataLine(line, totals)
+            end
+        end
+        if HasAnyStatValue(totals, true) then
+            return totals
+        end
+    end
+
+    local tip = EnsureScanTooltip()
+    tip:ClearLines()
+    tip:SetHyperlink(itemLink)
+
+    for i = 1, 40 do
+        local leftFS = _G[TOOLTIP_SCAN_NAME .. "TextLeft" .. i]
+        local rightFS = _G[TOOLTIP_SCAN_NAME .. "TextRight" .. i]
+        if not leftFS and not rightFS then
+            break
+        end
+        ReadTooltipLine(leftFS, rightFS, totals)
+    end
+
+    tip:Hide()
+    return totals
+end
+
+local function StripItemLinkEnchant(itemLink)
+    if type(itemLink) ~= "string" then
+        return nil
+    end
+    local itemString = itemLink:match("|H(item:[^|]+)|h")
+    itemString = itemString or itemLink:match("^(item:[^|]+)$")
+    if not itemString then
+        return nil
+    end
+
+    local parts = {}
+    for part in string.gmatch(itemString, "([^:]+)") do
+        parts[#parts + 1] = part
+    end
+    if parts[1] ~= "item" or not parts[2] then
+        return nil
+    end
+    parts[3] = "0"
+    return table.concat(parts, ":")
 end
 
 local function ExtractInfoStatValue(info, statID)
@@ -893,6 +974,82 @@ end
 
 function GB.GetInventorySlotStats(slotID)
     return ScanEquippedItemStats(slotID)
+end
+
+function GB.GetItemStatsFromLink(itemLink)
+    return ScanItemStatsFromLink(itemLink)
+end
+
+function GB.GetItemProfessionTagsFromLink(itemLink)
+    local tags = {}
+    if not itemLink or itemLink == "" then
+        return tags
+    end
+
+    if C_TooltipInfo and C_TooltipInfo.GetHyperlink then
+        local ok, data = pcall(C_TooltipInfo.GetHyperlink, itemLink)
+        if ok and data and data.lines then
+            for _, line in ipairs(data.lines) do
+                ReadTooltipProfessionLine(line, tags)
+            end
+        end
+        if next(tags) then
+            return tags
+        end
+    end
+
+    local tip = EnsureScanTooltip()
+    tip:ClearLines()
+    tip:SetHyperlink(itemLink)
+
+    for i = 1, 40 do
+        local leftFS = _G[TOOLTIP_SCAN_NAME .. "TextLeft" .. i]
+        local rightFS = _G[TOOLTIP_SCAN_NAME .. "TextRight" .. i]
+        if not leftFS and not rightFS then
+            break
+        end
+        local leftText = leftFS and leftFS.GetText and leftFS:GetText()
+        local rightText = rightFS and rightFS.GetText and rightFS:GetText()
+        for _, prof in ipairs(GB.GetProfessionDefs()) do
+            local label = prof:GetLabel():lower()
+            local find = type(prof.find) == "string" and prof.find:lower() or label
+            local leftLower = type(leftText) == "string" and leftText:lower() or nil
+            local rightLower = type(rightText) == "string" and rightText:lower() or nil
+            if (leftLower and (leftLower:find(label, 1, true) or leftLower:find(find, 1, true)))
+                or (rightLower and (rightLower:find(label, 1, true) or rightLower:find(find, 1, true))) then
+                tags[prof.id] = true
+            end
+        end
+    end
+
+    tip:Hide()
+    return tags
+end
+
+function GB.GetInventorySlotProfessionTags(slotID)
+    local itemLink = slotID and GetInventoryItemLink("player", slotID) or nil
+    return GB.GetItemProfessionTagsFromLink(itemLink)
+end
+
+function GB.GetInventorySlotEnchantStats(slotID)
+    local link = slotID and GetInventoryItemLink("player", slotID) or nil
+    if not link then
+        return GB.MakeTotals()
+    end
+
+    local strippedLink = StripItemLinkEnchant(link)
+    if not strippedLink or strippedLink == link then
+        return GB.MakeTotals()
+    end
+
+    local fullStats = ScanItemStatsFromLink(link)
+    local baseStats = ScanItemStatsFromLink(strippedLink)
+    local totals = GB.MakeTotals()
+    for _, stat in ipairs(GATHERBUFFS_STAT_ORDER) do
+        local statID = stat.id
+        totals[statID] = (fullStats[statID] or 0) - (baseStats[statID] or 0)
+    end
+    return totals
 end
 
 function GB.GetProfessionEquipmentTotalsFromInfo(info)

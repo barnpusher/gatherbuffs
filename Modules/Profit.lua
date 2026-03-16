@@ -1030,7 +1030,7 @@ end
 
 function GB:ToggleInfoPopup()
     if not self.infoPopup then
-        local FW, FH = 340, 240
+        local FW, FH = 420, 280
         local f = CreateFrame("Frame", "GBInfoPopup", UIParent, "BackdropTemplate")
         f:SetSize(FW, FH)
         f:SetFrameStrata("HIGH")
@@ -1051,7 +1051,7 @@ function GB:ToggleInfoPopup()
         f:SetBackdropBorderColor(0.55, 0.75, 0.95, 0.90)
         local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         title:SetPoint("TOPLEFT", 8, -8)
-        title:SetText("GatherBuffs - Price Info")
+        title:SetText("GatherBuffs - Character Info")
         title:SetTextColor(0.55, 0.75, 0.95)
         local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
         closeBtn:SetPoint("TOPRIGHT", 2, 2)
@@ -1077,7 +1077,7 @@ function GB:ToggleInfoPopup()
     if self.infoPopup:IsShown() then
         self.infoPopup:Hide()
     else
-        self.infoPopup.eb:SetText(self:GetPriceSourceInfo())
+        self.infoPopup.eb:SetText(self:GetCharacterProfessionInfo())
         self.infoPopup:ClearAllPoints()
         self.infoPopup:SetPoint("TOPLEFT", self.mainFrame, "TOPRIGHT", 8, 0)
         self.infoPopup:Show()
@@ -1089,10 +1089,118 @@ function GB:ToggleInfoPopup()
     end
 end
 
+local function FormatTotalsCompact(totals)
+    if not totals then
+        return "Fin 0  Per 0  Def 0  Spd 0%"
+    end
+    return string.format(
+        "Fin %s  Per %s  Def %s  Spd %s",
+        GB.FormatStat("finesse", totals.finesse or 0),
+        GB.FormatStat("perception", totals.perception or 0),
+        GB.FormatStat("deftness", totals.deftness or 0),
+        GB.FormatStat("speedPct", totals.speedPct or 0)
+    )
+end
+
+local function HasVisibleStats(totals)
+    if not totals then
+        return false
+    end
+    return (totals.finesse or 0) ~= 0
+        or (totals.perception or 0) ~= 0
+        or (totals.deftness or 0) ~= 0
+        or (totals.speedPct or 0) ~= 0
+end
+
+local function FormatKnownGearLabel(prof, slotKind, itemID)
+    local name, itemQuality = GetItemInfo(itemID)
+    name = name or ("item:" .. tostring(itemID))
+    if prof:IsKnownMidnightGearName(name, slotKind) then
+        local color = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[itemQuality or 0]
+        local coloredName = color and (color.hex .. name .. "|r") or name
+        local craftedTier = itemQuality and (itemQuality - 1) or nil
+        if craftedTier and craftedTier >= 1 and craftedTier <= 3 then
+            return string.format("%s (%d/3)", coloredName, craftedTier)
+        end
+        return coloredName
+    end
+    return string.format("|cffff4444%s|r", name)
+end
+
+function GB:GetCharacterProfessionInfo()
+    local lines = {}
+    local function L(text)
+        lines[#lines + 1] = text or ""
+    end
+
+    L("Current professions")
+    L("")
+
+    local found = false
+    for _, prof in ipairs(GB.GetProfessionDefs()) do
+        local vitals = prof:GetVitals(self)
+        local info = vitals and vitals.info or nil
+        if info then
+            found = true
+            L(string.format("%s - %d/%d", prof:GetLabel(), info.skill or 0, info.maxSkill or 0))
+            if vitals.statSnapshot then
+                L(string.format("  Current: %s", FormatTotalsCompact(vitals.statSnapshot.current)))
+                L(string.format("  Max:     %s", FormatTotalsCompact(vitals.statSnapshot.max)))
+            end
+
+            local tool = vitals.tool
+            if tool and tool.itemID then
+                L(string.format("  Tool: %s", FormatKnownGearLabel(prof, "tool", tool.itemID)))
+                if HasVisibleStats(tool.stats) then
+                    L(string.format("    Stats: %s", FormatTotalsCompact(tool.stats)))
+                end
+            else
+                L("  Tool: none")
+            end
+
+            local enchantInfo = vitals.toolEnchant
+            if enchantInfo and enchantInfo.hasEnchant then
+                L(string.format("  Enchant: %s", enchantInfo.enchantName or ("Enchant ID " .. tostring(enchantInfo.enchantID))))
+                if tool and tool.slotID then
+                    local enchantStats = GB.GetInventorySlotEnchantStats(tool.slotID)
+                    if HasVisibleStats(enchantStats) then
+                        L(string.format("    Stats: %s", FormatTotalsCompact(enchantStats)))
+                    end
+                end
+            else
+                L("  Enchant: none")
+            end
+
+            if vitals.accessories and #vitals.accessories > 0 then
+                for index, accessory in ipairs(vitals.accessories) do
+                    if accessory.itemID then
+                        L(string.format("  Accessory %d: %s", index, FormatKnownGearLabel(prof, "accessory", accessory.itemID)))
+                        if HasVisibleStats(accessory.stats) then
+                            L(string.format("    Stats: %s", FormatTotalsCompact(accessory.stats)))
+                        end
+                    else
+                        L(string.format("  Accessory %d: none", index))
+                    end
+                end
+            else
+                L("  Accessories: none")
+            end
+
+            L("")
+        end
+    end
+
+    if not found then
+        L("No professions detected.")
+    end
+
+    return table.concat(lines, "\n")
+end
+
 function GB.BuildGatherLookup()
     local lookup = {}
     for _, prof in ipairs(GB.GetProfessionDefs()) do
-        for _, entry in ipairs(prof.gatherItems or {}) do
+        for _, entry in ipairs(prof:GetGatherItems()) do
             local totalTiers = #entry.ids
             for tier, itemID in ipairs(entry.ids) do
                 if not lookup[itemID] then

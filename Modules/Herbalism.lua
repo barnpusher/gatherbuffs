@@ -8,6 +8,16 @@ GB.RegisterProfession({
     mainCard = true,
     showSettingsTab = true,
     weaponstone = true,
+    midnightGear = {
+        tools = {
+            "Thalassian Sickle",
+            "Sunforged Sickle",
+        },
+        accessories = {
+            "Thalassian Herbalist's Cowl",
+            "Thalassian Herbtender's Cradle",
+        },
+    },
     gatherItems = {
         { name = "Tranquility Bloom",     ids = { 236761, 236767 } },
         { name = "Argentleaf",            ids = { 236776, 236777 } },

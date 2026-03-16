@@ -165,9 +165,9 @@ local function MakeProfOptRow(parent, prof, yTop)
     lbl:SetPoint("LEFT", 36, 0)
     lbl:SetWidth(72)
     lbl:SetJustifyH("LEFT")
-    lbl:SetText(prof.label .. ":")
+    lbl:SetText(prof:GetLabel() .. ":")
 
-    if prof.id == "fishing" or prof.profitOnly then
+    if not prof:SupportsDesiredStatSelection() then
         return row
     end
 
@@ -397,8 +397,8 @@ function GB:BuildOptions()
         { id = "profit", label = "Profit" },
     }
     for _, prof in ipairs(GB.GetProfessionDefs()) do
-        if prof.showSettingsTab then
-            table.insert(tabDefs, { id = "prof_" .. prof.id, label = prof.label, prof = prof })
+        if prof:HasSettingsTab() then
+            table.insert(tabDefs, { id = "prof_" .. prof.id, label = prof:GetLabel(), prof = prof })
         end
     end
     local visibleTabDefs = {}
@@ -508,8 +508,8 @@ function GB:BuildOptions()
         local pc = contentFrames.profit
         local y = 0
         for _, prof in ipairs(GB.GetProfessionDefs()) do
-            if not prof.profitOnly and self:IsProfessionAvailable(prof.id) then
-                MakeBoolOptRow(pc, "Track " .. prof.label, y,
+            if not prof:IsProfitOnly() and self:IsProfessionAvailable(prof.id) then
+                MakeBoolOptRow(pc, "Track " .. prof:GetLabel(), y,
                     function()
                         return GB:IsProfitProfessionTracked(prof.id)
                     end,
@@ -523,8 +523,8 @@ function GB:BuildOptions()
         end
 
         for _, prof in ipairs(GB.GetProfessionDefs()) do
-            if prof.profitOnly and self:IsProfessionAvailable(prof.id) then
-                MakeBoolOptRow(pc, prof.profitToggleLabel or ("Track " .. prof.label), y,
+            if prof:IsProfitOnly() and self:IsProfessionAvailable(prof.id) then
+                MakeBoolOptRow(pc, prof:GetProfitToggleLabel(), y,
                     function()
                         return GB:IsProfitProfessionTracked(prof.id)
                     end,

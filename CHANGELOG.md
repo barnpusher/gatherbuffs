@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Expanded the profession-module refactor with a documented `ProfessionBase` contract and moved more UI, settings, and profit behavior behind profession methods
+- Reworked the Info popup to show current professions, tools, enchants, accessories, and live stat summaries instead of price-source info
+- Added Midnight profession gear catalogs for module-aware tool and accessory highlighting, plus improved profession gear slot inference from item tooltips
+- Added Tailoring bolt tracking so crafted Midnight bolts appear in Tailoring profit tracking
+
 ## 0.99.11
 
 - Added CurseForge project metadata and workflow secret wiring for automated CurseForge uploads on tagged releases

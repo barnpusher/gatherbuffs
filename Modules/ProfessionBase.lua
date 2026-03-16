@@ -5,6 +5,15 @@ local Base = GB.ProfessionBase
 local BASE_MT = { __index = Base }
 
 function GB.ApplyProfessionBase(def)
+    if type(def) ~= "table" then
+        error("Profession definition must be a table")
+    end
+    if type(def.id) ~= "string" or def.id == "" then
+        error("Profession definition is missing id")
+    end
+    if type(def.label) ~= "string" or def.label == "" then
+        error("Profession definition is missing label for " .. tostring(def.id))
+    end
     if getmetatable(def) ~= BASE_MT then
         setmetatable(def, BASE_MT)
     end
@@ -15,10 +24,12 @@ for _, def in ipairs(GB.GetProfessionDefs()) do
     GB.ApplyProfessionBase(def)
 end
 
+-- Returns whether a live profession name matches this module's lookup token.
 function Base:MatchesName(name)
     return type(name) == "string" and type(self.find) == "string" and name:find(self.find, 1, true) ~= nil
 end
 
+-- Builds the normalized profession snapshot stored in addon state.
 function Base:BuildSnapshotInfo(raw)
     local info = {
         id = self.id,
@@ -36,42 +47,197 @@ function Base:BuildSnapshotInfo(raw)
     return info
 end
 
+-- Returns the display label used in tabs, cards, and toggles.
+function Base:GetLabel()
+    return self.label
+end
+
+-- Returns whether this profession is currently available on the character.
 function Base:IsAvailable(addon)
     return (addon.profMap and addon.profMap[self.id] ~= nil) or (self.find and GB.HasProfessionByName(self.find)) or false
 end
 
+-- Returns the current live profession snapshot for the character.
 function Base:GetDisplayInfo(addon)
     return addon.profMap and addon.profMap[self.id] or nil
 end
 
+-- Returns the buff categories owned by this profession for settings and buff state checks.
 function Base:GetBuffCategoryIDs()
     return self.buffCategories or self.optionCategories or {}
 end
 
+-- Returns the gather/profit item definitions owned by this profession.
+function Base:GetGatherItems()
+    return self.gatherItems or {}
+end
+
+local function NormalizeGearName(name)
+    if type(name) ~= "string" then
+        return nil
+    end
+    return name:lower()
+end
+
+-- Returns the catalog of known Midnight gear names for this profession.
+function Base:GetMidnightGearCatalog()
+    return self.midnightGear or {}
+end
+
+-- Returns true if the given item name is recognized as Midnight gear for this profession.
+function Base:IsKnownMidnightGearName(itemName, slotKind)
+    local normalized = NormalizeGearName(itemName)
+    if not normalized then
+        return false
+    end
+
+    local catalog = self:GetMidnightGearCatalog()
+    local entries = catalog[slotKind == "tool" and "tools" or "accessories"] or {}
+    for _, entryName in ipairs(entries) do
+        if NormalizeGearName(entryName) == normalized then
+            return true
+        end
+    end
+    return false
+end
+
+-- Returns whether this profession should render a main card in the addon frame.
+function Base:HasMainCard()
+    return not self:IsProfitOnly() and self.mainCard ~= false
+end
+
+-- Returns whether this profession should appear as its own settings tab.
+function Base:HasSettingsTab()
+    return self.showSettingsTab == true
+end
+
+-- Returns whether this profession only participates in profit tracking.
+function Base:IsProfitOnly()
+    return self.profitOnly == true
+end
+
+-- Returns whether the settings UI should expose desired-stat selection.
+function Base:SupportsDesiredStatSelection()
+    return not self:IsProfitOnly() and self.supportsDesiredStatSelection ~= false
+end
+
+-- Returns whether the main card should show tool and enchant details.
+function Base:ShowsToolDetails()
+    return self.toolDetails == true
+end
+
+-- Returns whether the profession supports the shared Razorstone category.
+function Base:UsesWeaponstone()
+    return self.weaponstone == true
+end
+
+-- Returns the label shown in the Profit settings page.
+function Base:GetProfitToggleLabel()
+    return self.profitToggleLabel or ("Track " .. self:GetLabel())
+end
+
+-- Returns whether this profession's profit toggle can exist without live availability.
 function Base:CanTrackProfitWithoutAvailability()
     return self.trackProfitWithoutAvailability == true
 end
 
-function Base:GetEquipmentSlots(addon, info)
-    return GB.GetProfessionEquipmentSlotsFromInfo(info)
+-- Returns whether the card header should use a plain skill summary with no weekly item text.
+function Base:UsesSimpleSkillSummary()
+    return self.simpleSkillSummary == true
 end
 
+-- Returns the overload category ID for this profession, if one exists.
+function Base:GetOverloadCategoryID()
+    local catID = "overload_" .. self.id
+    return GB.GetCatDef(catID) and catID or nil
+end
+
+-- Returns row definitions for profession-specific buff rows shown on the main card.
+function Base:GetMainCardBuffRowDefs()
+    local rows = {}
+    local overloadCatID = self:GetOverloadCategoryID()
+    if overloadCatID then
+        rows[#rows + 1] = { key = "overload", catID = overloadCatID }
+    end
+    if self:UsesWeaponstone() and GB.GetCatDef("weaponstone") then
+        rows[#rows + 1] = { key = "weaponstone", catID = "weaponstone", profScoped = true }
+    end
+    return rows
+end
+
+-- Returns the compact summary text shown on the profession header.
+function Base:GetCardSummaryText(addon, vitals)
+    local info = vitals and vitals.info or nil
+    if not info then
+        return ""
+    end
+
+    local weeklyItemsText = GB.GetProfessionWeeklyItemText(self.id)
+    if self:UsesSimpleSkillSummary() then
+        return string.format("%d/%d", info.skill, info.maxSkill)
+    end
+    if weeklyItemsText and weeklyItemsText ~= "" then
+        return string.format("%s   %d/%d", weeklyItemsText, info.skill, info.maxSkill)
+    end
+    return string.format("%d/%d", info.skill, info.maxSkill)
+end
+
+-- Returns the equipped tool/accessory slot IDs for this profession.
+function Base:GetEquipmentSlots(addon, info)
+    local slots = GB.GetProfessionEquipmentSlotsFromInfo(info)
+    if not slots or not info or (info.professionSlotIndex ~= 1 and info.professionSlotIndex ~= 2) then
+        return slots
+    end
+
+    local alternateSlots = GB.GetProfessionEquipmentSlotsFromInfo({
+        professionSlotIndex = info.professionSlotIndex == 1 and 2 or 1,
+    })
+    if not alternateSlots then
+        return slots
+    end
+
+    local function score(slotSet)
+        local total = 0
+        local toolTags = GB.GetInventorySlotProfessionTags(slotSet.tool)
+        if toolTags and toolTags[self.id] then
+            total = total + 2
+        end
+        for _, slotID in ipairs(slotSet.accessories or {}) do
+            local tags = GB.GetInventorySlotProfessionTags(slotID)
+            if tags and tags[self.id] then
+                total = total + 1
+            end
+        end
+        return total
+    end
+
+    if score(alternateSlots) > score(slots) then
+        return alternateSlots
+    end
+    return slots
+end
+
+-- Returns the active enchant metadata for the profession tool.
 function Base:GetToolEnchantInfo(addon, info)
     return GB.GetProfessionToolEnchantInfoFromInfo(info)
 end
 
+-- Returns stat totals parsed from equipped profession items.
 function Base:GetEquipmentTotals(addon, info)
     return GB.GetProfessionEquipmentTotalsFromInfo(info)
 end
 
+-- Returns stat totals exposed directly by Blizzard's profession API, if available.
 function Base:GetApiTotals(addon, info)
     return GB.GetProfessionApiTotalsFromInfo(info, addon and addon.profMap or nil)
 end
 
+-- Returns total buff contribution for the profession, optionally active-only.
 function Base:GetBuffTotals(addon, activeOnly)
     return GB.GetProfessionBuffTotalsByID(addon, self.id, activeOnly)
 end
 
+-- Returns resolved buff state information for all profession buff categories.
 function Base:GetBuffStates(addon)
     local states = {}
     for _, catID in ipairs(self:GetBuffCategoryIDs()) do
@@ -85,6 +251,7 @@ function Base:GetBuffStates(addon)
     return states
 end
 
+-- Returns the merged profession stat snapshot used by the main UI.
 function Base:GetStatSnapshot(addon)
     local info = self:GetDisplayInfo(addon)
     if not info then
@@ -93,6 +260,7 @@ function Base:GetStatSnapshot(addon)
     return GB.BuildProfessionStatSnapshot(addon, self.id, info)
 end
 
+-- Returns the full live profession payload used by debug output and UI rendering.
 function Base:GetVitals(addon)
     local info = self:GetDisplayInfo(addon)
     if not info then
