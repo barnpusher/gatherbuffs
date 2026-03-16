@@ -8,6 +8,7 @@
 - Added optional alerts for buff expiry and consumable running out of stock
 - Added `/gb newsession` slash command to reset the session without opening settings
 - Added `/gb copy` slash command to open a copyable session report window
+- Replaced the direct report actions with a dedicated in-addon report popup that supports copy, console export, and party export
 - Updated README feature list and command documentation
 
 ## 0.99.12
