@@ -1,15 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.99.13
 
-- Fixed `ToggleMainCollapsed` always setting collapsed to false instead of toggling
-- Fixed vendor purchases being tracked as profit loot by ignoring loot events while a merchant window is open, including deferred pending-loot entries
-- Added auto-pause on inactivity: session pauses automatically after a configurable period with no tracked loot, with pause suppressed while a merchant is open
-- Added optional alerts for buff expiry and consumable running out of stock
-- Added `/gb newsession` slash command to reset the session without opening settings
-- Added `/gb copy` slash command to open a copyable session report window
-- Replaced the direct report actions with a dedicated in-addon report popup that supports copy, console export, and party export
-- Updated README feature list and command documentation
+- Fixed the main panel collapse button so it properly opens and closes the addon sections
+- Fixed profit tracking so buying items from a vendor no longer counts as farmed profit
+- Added optional auto-pause for profit sessions after a chosen period with no loot activity
+- Added optional alerts when a tracked buff expires or when a consumable runs out
+- Added `/gb newsession` to start a fresh profit session quickly
+- Added `/gb copy` to open a copyable report window for the current session
+- Reworked the report flow so the Profit panel opens a proper report window with copy, console, and party-share options
+- Expanded the Info window to show your current AH pricing setup, active source, and available price data
+- Improved manual AH source selection so unavailable sources stay visible but cannot be selected, while auto mode shows the source currently being used
+- Updated the README with the latest commands and feature notes
 
 ## 0.99.12
 

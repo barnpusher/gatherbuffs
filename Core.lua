@@ -177,13 +177,9 @@ GB.PROFIT_PRICE_SOURCE_MODES = {
     { id = "manual", label = "Manual" },
 }
 
-GB.PROFIT_PRICE_SOURCES = {
-    { id = "tsm", label = "TSM" },
-    { id = "zygor_scan", label = "Zygor Scan" },
-    { id = "zygor_median", label = "Zygor Median" },
-    { id = "zygor_low", label = "Zygor Low" },
-    { id = "auctionator", label = "Auctionator" },
-}
+GB.ahSourceRegistry = {}
+GB.ahSourceOrder = {}
+GB.PROFIT_PRICE_SOURCES = {}
 
 GB.QUAL_ICON = {
     [1] = "|A:Professions-ChatIcon-Quality-12-Tier1:13:13|a",
@@ -328,24 +324,144 @@ function GB.GetProfitPriceSourceMode()
     return "auto"
 end
 
+local function SortAhSources(a, b)
+    local left = GB.ahSourceRegistry[a]
+    local right = GB.ahSourceRegistry[b]
+    local leftOrder = left and left.GetSortOrder and left:GetSortOrder() or math.huge
+    local rightOrder = right and right.GetSortOrder and right:GetSortOrder() or math.huge
+    if leftOrder ~= rightOrder then
+        return leftOrder < rightOrder
+    end
+    local leftLabel = left and left.GetLabel and left:GetLabel() or a
+    local rightLabel = right and right.GetLabel and right:GetLabel() or b
+    return leftLabel < rightLabel
+end
+
+local function RebuildPriceSourceList()
+    for i = #GB.PROFIT_PRICE_SOURCES, 1, -1 do
+        GB.PROFIT_PRICE_SOURCES[i] = nil
+    end
+    for _, sourceID in ipairs(GB.ahSourceOrder) do
+        local source = GB.ahSourceRegistry[sourceID]
+        if source then
+            GB.PROFIT_PRICE_SOURCES[#GB.PROFIT_PRICE_SOURCES + 1] = {
+                id = sourceID,
+                label = source:GetLabel(),
+            }
+        end
+    end
+end
+
+function GB.RegisterAhSource(source)
+    if not source or type(source.GetID) ~= "function" then
+        return
+    end
+    local sourceID = source:GetID()
+    if not sourceID or sourceID == "" then
+        return
+    end
+    local exists = GB.ahSourceRegistry[sourceID] ~= nil
+    GB.ahSourceRegistry[sourceID] = source
+    if not exists then
+        GB.ahSourceOrder[#GB.ahSourceOrder + 1] = sourceID
+    end
+    table.sort(GB.ahSourceOrder, SortAhSources)
+    RebuildPriceSourceList()
+end
+
+function GB.GetAhSource(sourceID)
+    return GB.ahSourceRegistry[sourceID]
+end
+
+function GB.GetAhSources()
+    local sources = {}
+    for _, sourceID in ipairs(GB.ahSourceOrder) do
+        local source = GB.ahSourceRegistry[sourceID]
+        if source then
+            sources[#sources + 1] = source
+        end
+    end
+    return sources
+end
+
+function GB.GetAutoPriceSourceOrder()
+    local sourceIDs = {}
+    for _, source in ipairs(GB.GetAhSources()) do
+        if source.IsInAutoOrder and source:IsInAutoOrder() then
+            sourceIDs[#sourceIDs + 1] = source:GetID()
+        end
+    end
+    return sourceIDs
+end
+
+function GB.IsAhSourceAvailable(sourceID)
+    local source = GB.GetAhSource(sourceID)
+    return source and source.IsAvailable and source:IsAvailable() or false
+end
+
+function GB.HasAnyPriceSourceAvailable()
+    for _, source in ipairs(GB.GetAhSources()) do
+        if source.IsAvailable and source:IsAvailable() then
+            return true
+        end
+    end
+    return false
+end
+
+function GB.GetCurrentPriceSource()
+    local mode = GB.GetProfitPriceSourceMode()
+    if mode == "manual" then
+        return GB.GetAhSource(GB.GetProfitPriceSource())
+    end
+    for _, sourceID in ipairs(GB.GetAutoPriceSourceOrder()) do
+        local source = GB.GetAhSource(sourceID)
+        if source and source.IsAvailable and source:IsAvailable() then
+            return source
+        end
+    end
+    return nil
+end
+
 function GB.GetProfitPriceSource()
     local modules = GB.db and GB.db.modules
     local selected = modules and modules.profitPriceSource
-    for _, entry in ipairs(GB.PROFIT_PRICE_SOURCES) do
-        if entry.id == selected then
-            return selected
-        end
+    if GB.GetAhSource(selected) then
+        return selected
     end
     return GB.DEFAULTS.modules.profitPriceSource
 end
 
 function GB.GetProfitPriceSourceLabel(sourceID)
-    for _, entry in ipairs(GB.PROFIT_PRICE_SOURCES) do
-        if entry.id == sourceID then
-            return entry.label
-        end
+    local source = GB.GetAhSource(sourceID)
+    if source then
+        return source:GetLabel()
     end
     return sourceID or "-"
+end
+
+function GB:GetPrice(itemID)
+    if not itemID then
+        return nil
+    end
+
+    local mode = GB.GetProfitPriceSourceMode()
+    if mode == "manual" then
+        local source = GB.GetAhSource(GB.GetProfitPriceSource())
+        if source and source.GetPrice then
+            return source:GetPrice(itemID)
+        end
+        return nil
+    end
+
+    for _, sourceID in ipairs(GB.GetAutoPriceSourceOrder()) do
+        local source = GB.GetAhSource(sourceID)
+        local value = source and source.GetPrice and source:GetPrice(itemID)
+        if value then
+            return value
+        end
+    end
+
+    return nil
 end
 
 function GB.GetCatDef(catID)

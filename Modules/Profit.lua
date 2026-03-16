@@ -3,7 +3,6 @@ local _, GB = ...
 local W = GB.W
 local PAD = GB.PAD
 local QUAL_ICON = GB.QUAL_ICON
-local AUCTIONATOR_CALLER = "GatherBuffs"
 local MIN_GPH_ELAPSED = 60
 
 function GB:GetActiveElapsed()
@@ -200,148 +199,6 @@ function GB:ResetSession()
     if self.profitPanel then
         self:UpdateProfit()
     end
-end
-
-local function GetTSMPrice(itemID)
-    if TSM_API and TSM_API.GetCustomPriceValue then
-        local ok, value = pcall(TSM_API.GetCustomPriceValue, "DBMarket", "i:" .. itemID)
-        if ok and value and value > 0 then
-            return value
-        end
-    end
-    if TSM_API and TSM_API.FOUR and TSM_API.FOUR.CustomPrice and TSM_API.FOUR.CustomPrice.GetValue then
-        local ok, value = pcall(TSM_API.FOUR.CustomPrice.GetValue, "DBMarket", "i:" .. itemID)
-        if ok and value and value > 0 then
-            return value
-        end
-    end
-    return nil
-end
-
-local function GetZygorTrendItem(itemID)
-    if not (ZGV and ZGV.Gold) then
-        return nil
-    end
-    local trends = ZGV.Gold.servertrends or ZGV.Gold.ServerTrends or ZGV.Gold.ServerTrend
-    if trends and trends.items and trends.items[itemID] then
-        return trends.items[itemID]
-    end
-    local globalTrends = ZGV.Gold.servertrends_global
-    if globalTrends and globalTrends.items then
-        return globalTrends.items[itemID]
-    end
-    return nil
-end
-
-local function GetZygorLivePrice(itemID)
-    if ZGV and ZGV.Gold and ZGV.Gold.Scan and ZGV.Gold.Scan.GetPrice then
-        local ok, value = pcall(ZGV.Gold.Scan.GetPrice, ZGV.Gold.Scan, itemID)
-        if ok and value and value > 0 then
-            return value
-        end
-    end
-    return nil
-end
-
-local function HasZygorScanData()
-    if not (ZGV and ZGV.Gold and ZGV.Gold.Scan and ZGV.Gold.Scan.data) then
-        return false
-    end
-    local data = ZGV.Gold.Scan.data
-    local today = data.today
-    return type(today) == "number" and type(data[today]) == "table" and next(data[today]) ~= nil
-end
-
-local function HasZygorTrendData()
-    if not (ZGV and ZGV.Gold) then
-        return false
-    end
-    local trends = ZGV.Gold.servertrends
-    if trends and type(trends.items) == "table" and next(trends.items) ~= nil then
-        return true
-    end
-    local globalTrends = ZGV.Gold.servertrends_global
-    return globalTrends and type(globalTrends.items) == "table" and next(globalTrends.items) ~= nil
-end
-
-local function GetAuctionatorPrice(itemID)
-    if Auctionator and Auctionator.API and Auctionator.API.v1 and Auctionator.API.v1.GetAuctionPriceByItemID then
-        local ok, value = pcall(Auctionator.API.v1.GetAuctionPriceByItemID, AUCTIONATOR_CALLER, itemID)
-        if ok and value and value > 0 then
-            return value
-        end
-    end
-    return nil
-end
-
-local PRICE_PROVIDERS = {
-    tsm = GetTSMPrice,
-    zygor_scan = GetZygorLivePrice,
-    zygor_median = function(itemID)
-        local trendItem = GetZygorTrendItem(itemID)
-        if trendItem and trendItem.p_md and trendItem.p_md > 0 then
-            return trendItem.p_md
-        end
-        return nil
-    end,
-    zygor_low = function(itemID)
-        local trendItem = GetZygorTrendItem(itemID)
-        if trendItem and trendItem.p_lo and trendItem.p_lo > 0 then
-            return trendItem.p_lo
-        end
-        return nil
-    end,
-    auctionator = GetAuctionatorPrice,
-}
-
-local AUTO_PRICE_SOURCE_ORDER = {
-    "tsm",
-    "zygor_scan",
-    "zygor_median",
-    "zygor_low",
-    "auctionator",
-}
-
-local function IsPriceSourceAvailable(sourceID)
-    if sourceID == "tsm" then
-        return TSM_API ~= nil
-    end
-    if sourceID == "zygor_scan" then
-        return HasZygorScanData()
-    end
-    if sourceID == "zygor_median" or sourceID == "zygor_low" then
-        return HasZygorTrendData()
-    end
-    if sourceID == "auctionator" then
-        return Auctionator and Auctionator.API and Auctionator.API.v1 and Auctionator.API.v1.GetAuctionPriceByItemID
-    end
-    return false
-end
-
-function GB:GetPrice(itemID)
-    if not itemID then
-        return nil
-    end
-
-    local mode = GB.GetProfitPriceSourceMode()
-    if mode == "manual" then
-        local sourceID = GB.GetProfitPriceSource()
-        local provider = PRICE_PROVIDERS[sourceID]
-        if provider then
-            return provider(itemID)
-        end
-        return nil
-    end
-
-    for _, sourceID in ipairs(AUTO_PRICE_SOURCE_ORDER) do
-        local provider = PRICE_PROVIDERS[sourceID]
-        local value = provider and provider(itemID)
-        if value then
-            return value
-        end
-    end
-
-    return nil
 end
 
 function GB:TrackLoot(itemID, amount, link, activeForProfit)
@@ -1098,57 +955,42 @@ function GB:ShowUnknownLoot(itemID, itemLink)
     self.unknownLootFrame.eb:HighlightText()
 end
 
+local function AppendPriceSourceInfoLines(addLine)
+    addLine("=== Price Sources ===")
+    for _, source in ipairs(GB.GetAhSources()) do
+        addLine(source:GetStatusText())
+        if source.AppendDebugLines then
+            source:AppendDebugLines(addLine)
+        end
+    end
+
+    local mode = GB.GetProfitPriceSourceMode()
+    if mode == "manual" then
+        local sourceID = GB.GetProfitPriceSource()
+        local sourceLabel = GB.GetProfitPriceSourceLabel(sourceID)
+        local sourceState = GB.IsAhSourceAvailable(sourceID) and "available" or "not found"
+        addLine("Mode: Manual")
+        addLine("Selected source: " .. sourceLabel .. " (" .. sourceState .. ")")
+    else
+        local labels = {}
+        for _, sourceID in ipairs(GB.GetAutoPriceSourceOrder()) do
+            labels[#labels + 1] = GB.GetProfitPriceSourceLabel(sourceID)
+        end
+        addLine("Mode: Auto")
+        addLine("Lookup order: " .. table.concat(labels, " -> "))
+    end
+    if not GB.HasAnyPriceSourceAvailable() then
+        addLine("No price data - profit values unavailable")
+    end
+end
+
 function GB:GetPriceSourceInfo()
     local lines = {}
     local function L(s)
         table.insert(lines, s or "")
     end
 
-    L("=== Price Sources ===")
-    if TSM_API then
-        L("TSM: active" .. (TSM_API.FOUR and " (v4)" or " (v3)"))
-    else
-        L("TSM: not found")
-    end
-    if ZGV and ZGV.Gold then
-        local scanTime
-        for _, tbl in ipairs({ ZGV.Gold.Scan, ZGV.Gold.servertrends, ZGV.Gold.ServerTrends, ZGV.Gold.db }) do
-            if type(tbl) == "table" and not scanTime then
-                for _, k in ipairs({ "lastScan", "scanTime", "updated", "lastUpdate", "timestamp", "scantime" }) do
-                    if type(tbl[k]) == "number" and tbl[k] > 1000000000 then
-                        scanTime = tbl[k]
-                        break
-                    end
-                end
-            end
-        end
-        L("Zygor Gold: active")
-        L("  Last scan: " .. (scanTime and date("%Y-%m-%d %H:%M", scanTime) or "unknown"))
-        L("  Realm scope: current character realm/faction")
-        L("  Local scan data: " .. (HasZygorScanData() and "available" or "not available"))
-        L("  Trend data: " .. (HasZygorTrendData() and "available" or "not available"))
-    else
-        L("Zygor Gold: not found")
-    end
-    if Auctionator and Auctionator.API and Auctionator.API.v1 and Auctionator.API.v1.GetAuctionPriceByItemID then
-        L("Auctionator: active")
-    else
-        L("Auctionator: not found")
-    end
-    local mode = GB.GetProfitPriceSourceMode()
-    if mode == "manual" then
-        local sourceID = GB.GetProfitPriceSource()
-        local sourceLabel = GB.GetProfitPriceSourceLabel(sourceID)
-        local sourceState = IsPriceSourceAvailable(sourceID) and "available" or "not found"
-        L("Mode: Manual")
-        L("Selected source: " .. sourceLabel .. " (" .. sourceState .. ")")
-    else
-        L("Mode: Auto")
-        L("Lookup order: TSM -> Zygor scan -> Zygor median -> Zygor low -> Auctionator")
-    end
-    if not TSM_API and not (ZGV and ZGV.Gold) and not (Auctionator and Auctionator.API and Auctionator.API.v1 and Auctionator.API.v1.GetAuctionPriceByItemID) then
-        L("No price data - profit values unavailable")
-    end
+    AppendPriceSourceInfoLines(L)
 
     L("")
     L("=== Session Item Prices ===")
@@ -1341,6 +1183,27 @@ function GB:GetCharacterProfessionInfo()
     if not found then
         L("No professions detected.")
     end
+
+    L("")
+    L("AH pricing")
+    local currentSource = GB.GetCurrentPriceSource()
+    L(string.format("  Mode: %s", GB.GetProfitPriceSourceMode() == "manual" and "Manual" or "Auto"))
+    L(string.format("  Current source: %s", currentSource and currentSource:GetLabel() or "none available"))
+    local labels = {}
+    for _, sourceID in ipairs(GB.GetAutoPriceSourceOrder()) do
+        labels[#labels + 1] = GB.GetProfitPriceSourceLabel(sourceID)
+    end
+    if #labels > 0 then
+        L(string.format("  Lookup order: %s", table.concat(labels, " -> ")))
+    end
+    L("")
+    AppendPriceSourceInfoLines(function(text)
+        if text and text ~= "" then
+            L("  " .. text)
+        else
+            L("")
+        end
+    end)
 
     return table.concat(lines, "\n")
 end

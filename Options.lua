@@ -48,11 +48,25 @@ local function MakeDropList(items, onPick)
         fs:SetAllPoints()
         fs:SetJustifyH("LEFT")
         fs:SetText(item.label)
-        fs:SetTextColor(0.88, 0.88, 0.88)
-        btn:SetScript("OnEnter", function() fs:SetTextColor(1, 0.88, 0.2) end)
-        btn:SetScript("OnLeave", function() fs:SetTextColor(0.88, 0.88, 0.88) end)
+        local function applyNormalColor()
+            if item.disabled then
+                fs:SetTextColor(0.45, 0.45, 0.48)
+            else
+                fs:SetTextColor(0.88, 0.88, 0.88)
+            end
+        end
+        applyNormalColor()
+        btn:SetScript("OnEnter", function()
+            if not item.disabled then
+                fs:SetTextColor(1, 0.88, 0.2)
+            end
+        end)
+        btn:SetScript("OnLeave", applyNormalColor)
         btn:SetScript("OnClick", function()
-            onPick(item.value)
+            if item.disabled then
+                return
+            end
+            onPick(item.value, item)
             CloseDropdown()
         end)
     end
@@ -238,7 +252,7 @@ local function MakeBoolOptRow(parent, label, yTop, getter, setter)
     return row
 end
 
-local function MakeChoiceOptRow(parent, label, yTop, items, getter, setter)
+local function MakeChoiceOptRow(parent, label, yTop, items, getter, setter, isEnabled)
     local row = CreateFrame("Frame", nil, parent)
     row:SetPoint("TOPLEFT", PAD, yTop)
     row:SetSize(W + 20, 24)
@@ -280,8 +294,26 @@ local function MakeChoiceOptRow(parent, label, yTop, items, getter, setter)
         return "-"
     end
 
+    local function rowEnabled()
+        if isEnabled == nil then
+            return true
+        end
+        return isEnabled()
+    end
+
     local function refresh()
         txt:SetText(getLabel(getter()))
+        if rowEnabled() then
+            btn:SetBackdropColor(0.10, 0.10, 0.14, 0.92)
+            btn:SetBackdropBorderColor(0.38, 0.38, 0.40)
+            txt:SetTextColor(0.88, 0.88, 0.90)
+            arr:SetTextColor(0.88, 0.88, 0.90)
+        else
+            btn:SetBackdropColor(0.08, 0.08, 0.10, 0.70)
+            btn:SetBackdropBorderColor(0.24, 0.24, 0.26)
+            txt:SetTextColor(0.56, 0.56, 0.58)
+            arr:SetTextColor(0.56, 0.56, 0.58)
+        end
     end
 
     local list = MakeDropList(items, function(value)
@@ -290,6 +322,9 @@ local function MakeChoiceOptRow(parent, label, yTop, items, getter, setter)
     end)
 
     btn:SetScript("OnClick", function(self)
+        if not rowEnabled() then
+            return
+        end
         if openDropList == list and list:IsShown() then
             CloseDropdown()
         else
@@ -613,15 +648,27 @@ function GB:BuildOptions()
 
         local sourceItems = {}
         for _, entry in ipairs(GB.PROFIT_PRICE_SOURCES) do
-            sourceItems[#sourceItems + 1] = { label = entry.label, value = entry.id }
+            local available = GB.IsAhSourceAvailable(entry.id)
+            sourceItems[#sourceItems + 1] = {
+                label = available and entry.label or (entry.label .. " (unavailable)"),
+                value = entry.id,
+                disabled = not available,
+            }
         end
         MakeChoiceOptRow(pc, "Manual source", y - 36, sourceItems,
             function()
+                if GB.GetProfitPriceSourceMode() == "auto" then
+                    local current = GB.GetCurrentPriceSource()
+                    return current and current:GetID() or GB.GetProfitPriceSource()
+                end
                 return GB.GetProfitPriceSource()
             end,
             function(value)
                 GB.db.modules.profitPriceSource = value
                 GB:UpdateProfit()
+            end,
+            function()
+                return GB.GetProfitPriceSourceMode() == "manual"
             end)
     end
 
