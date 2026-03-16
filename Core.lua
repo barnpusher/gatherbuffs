@@ -63,6 +63,8 @@ GB.DEFAULTS = {
     optY = nil,
     infoX = nil,
     infoY = nil,
+    reportX = nil,
+    reportY = nil,
     shardTracker = {
         spent = 0,
         lastQuantity = nil,
@@ -476,6 +478,28 @@ function GB.GetProfDef(profID)
     return GB.professionRegistry[profID]
 end
 
+function GB:InvalidateProfessionStaticCache()
+    self.professionStaticCacheVersion = (self.professionStaticCacheVersion or 0) + 1
+    self.professionStaticCache = {}
+    self.vitalsNeedsRefresh = true
+end
+
+function GB:GetProfessionStaticCache(profID)
+    if type(profID) ~= "string" or profID == "" then
+        return nil
+    end
+    self.professionStaticCache = self.professionStaticCache or {}
+    return self.professionStaticCache[profID]
+end
+
+function GB:SetProfessionStaticCache(profID, cacheEntry)
+    if type(profID) ~= "string" or profID == "" then
+        return
+    end
+    self.professionStaticCache = self.professionStaticCache or {}
+    self.professionStaticCache[profID] = cacheEntry
+end
+
 function GB:HasFishingProfession()
     local prof = GB.GetProfDef("fishing")
     return prof and prof:IsAvailable(self) or false
@@ -575,7 +599,7 @@ function GB.GetBuffDefBySpellID(catID, spellID)
         return nil
     end
     for _, buff in ipairs(cat.buffs) do
-        if GB.NormalizeSpellID(buff.spellID) == normalizedSpellID then
+        if GB.BuffHasSpellID(buff, normalizedSpellID) then
             return buff
         end
     end
@@ -593,9 +617,48 @@ function GB.BuffMatchesProfession(buff, profID)
     return false
 end
 
+function GB.GetBuffSpellIDs(buff)
+    local spellIDs = {}
+    if not buff then
+        return spellIDs
+    end
+
+    local function addSpellID(spellID)
+        local normalizedSpellID = GB.NormalizeSpellID(spellID)
+        if normalizedSpellID then
+            spellIDs[#spellIDs + 1] = normalizedSpellID
+        end
+    end
+
+    addSpellID(buff.spellID)
+    for _, spellID in ipairs(buff.altSpellIDs or {}) do
+        addSpellID(spellID)
+    end
+    return spellIDs
+end
+
+function GB.BuffHasSpellID(buff, spellID)
+    local normalizedSpellID = GB.NormalizeSpellID(spellID)
+    if not normalizedSpellID then
+        return false
+    end
+    for _, buffSpellID in ipairs(GB.GetBuffSpellIDs(buff)) do
+        if buffSpellID == normalizedSpellID then
+            return true
+        end
+    end
+    return false
+end
+
 function GB.GetPlayerAura(spellID)
     local normalizedSpellID = GB.NormalizeSpellID(spellID)
     if not normalizedSpellID then
+        return nil
+    end
+    if GB.auraSnapshot and GB.auraSnapshot[normalizedSpellID] then
+        return GB.auraSnapshot[normalizedSpellID]
+    end
+    if GB.auraSnapshot and InCombatLockdown() then
         return nil
     end
     if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
@@ -614,6 +677,93 @@ function GB.GetPlayerAura(spellID)
         end
     end
     return nil
+end
+
+function GB.GetPlayerAuraForBuff(buff)
+    if not buff then
+        return nil
+    end
+    for _, spellID in ipairs(GB.GetBuffSpellIDs(buff)) do
+        local aura = GB.GetPlayerAura(spellID)
+        if aura then
+            return aura
+        end
+    end
+    return nil
+end
+
+function GB.GetAuraNumericValues(aura)
+    if not aura then
+        return {}
+    end
+    local values, seen = {}, {}
+    local function addValue(value)
+        if type(value) == "number" and value > 0 and not seen[value] then
+            seen[value] = true
+            values[#values + 1] = value
+        end
+    end
+    addValue(aura.amount)
+    addValue(aura.value1)
+    addValue(aura.value2)
+    addValue(aura.value3)
+    if type(aura.points) == "table" then
+        for _, value in pairs(aura.points) do
+            addValue(value)
+        end
+    end
+    return values
+end
+
+function GB.ResolveAuraBuff(catID, aura, profID, preferredBuff)
+    local cat = GB.GetCatDef(catID)
+    if not (cat and aura and aura.spellId) then
+        return preferredBuff
+    end
+
+    local normalizedSpellID = GB.NormalizeSpellID(aura.spellId)
+    if not normalizedSpellID then
+        return preferredBuff
+    end
+
+    local candidates = {}
+    for _, buff in ipairs(cat.buffs or {}) do
+        if GB.BuffHasSpellID(buff, normalizedSpellID) and GB.BuffMatchesProfession(buff, profID) then
+            candidates[#candidates + 1] = buff
+        end
+    end
+    if #candidates <= 1 then
+        return candidates[1] or preferredBuff
+    end
+
+    local auraValues = GB.GetAuraNumericValues(aura)
+    if #auraValues > 0 then
+        local valueSet = {}
+        for _, value in ipairs(auraValues) do
+            valueSet[value] = true
+        end
+
+        local bestBuff, bestScore, tied = nil, 0, false
+        for _, buff in ipairs(candidates) do
+            local score = 0
+            for _, stat in ipairs(GATHERBUFFS_STAT_ORDER or {}) do
+                local statValue = buff.stats and buff.stats[stat.id]
+                if type(statValue) == "number" and valueSet[statValue] then
+                    score = score + 1
+                end
+            end
+            if score > bestScore then
+                bestBuff, bestScore, tied = buff, score, false
+            elseif score > 0 and score == bestScore then
+                tied = true
+            end
+        end
+        if bestBuff and bestScore > 0 and not tied then
+            return bestBuff
+        end
+    end
+
+    return preferredBuff or candidates[1]
 end
 
 function GB.GetSpellCooldownInfo(spellID)
@@ -1119,8 +1269,7 @@ function GB.GetProfessionBuffTotalsByID(self, profID, activeOnly)
     local totals = GB.MakeTotals()
     for _, cat in ipairs(GATHERBUFFS_CATEGORIES) do
         if cat.scope == "common" then
-            local db = self.db.categories[cat.id]
-            if db and db.enabled then
+            if self:GetCategoryEnabled(cat.id, profID) then
                 local buff, aura = self:GetRowBuff(cat.id, profID)
                 if buff and (not activeOnly or aura) then
                     GB.AddStats(totals, buff)

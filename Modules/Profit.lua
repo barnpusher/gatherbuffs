@@ -68,6 +68,7 @@ function GB:LoadSessionState()
             table.insert(self.sessionVendorOrder, item.itemID)
         end
     end
+    self.profitUiDirty = true
 end
 
 function GB:SaveSessionState()
@@ -136,8 +137,13 @@ function GB:TogglePause()
         self.sessionPausedAt = time()
         self.sessionPaused = true
     end
+    self.profitUiDirty = true
     self:SaveSessionState()
     self:UpdateProfit()
+end
+
+function GB:MarkProfitUiDirty()
+    self.profitUiDirty = true
 end
 
 function GB:MaybeAutoStartSession()
@@ -192,6 +198,9 @@ function GB:ResetSession()
     self.lastGphValue = 0
     self.lastGphUpdateTime = nil
     self.gphDirty = true
+    self.profitRowCache = nil
+    self.profitTotalValue = 0
+    self.profitUiDirty = true
     if self.gatherLookup then
         self:CaptureInventoryBaseline()
     end
@@ -218,6 +227,7 @@ function GB:TrackLoot(itemID, amount, link, activeForProfit)
     item.link = link or item.link
     item.price = self:GetPrice(itemID)
     self.gphDirty = true
+    self:MarkProfitUiDirty()
     if not item.quality then
         local _, _, q = GetItemInfo(itemID)
         item.quality = q
@@ -239,6 +249,7 @@ function GB:TrackVendorLoot(itemID, amount, link)
     item.link = link or item.link
     item.name = GetItemInfo(itemID) or item.name
     self.gphDirty = true
+    self:MarkProfitUiDirty()
     self:SaveSessionState()
 end
 
@@ -468,7 +479,11 @@ function GB:ToggleReportPopup()
         f:EnableMouse(true)
         f:RegisterForDrag("LeftButton")
         f:SetScript("OnDragStart", function(self) self:StartMoving() end)
-        f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+        f:SetScript("OnDragStop", function(self)
+            self:StopMovingOrSizing()
+            GB.db.reportX = self:GetLeft()
+            GB.db.reportY = self:GetTop()
+        end)
         f:SetBackdrop({
             bgFile = "Interface/Tooltips/UI-Tooltip-Background",
             edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
@@ -562,7 +577,11 @@ function GB:ToggleReportPopup()
     local lines = self:BuildProfitReportLines()
     self.reportPopup.eb:SetText(table.concat(lines, "\n"))
     self.reportPopup:ClearAllPoints()
-    self.reportPopup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    if self.db.reportX and self.db.reportY then
+        self.reportPopup:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", self.db.reportX, self.db.reportY)
+    else
+        self.reportPopup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    end
     self.reportPopup:Show()
     self.reportPopup.eb:SetFocus()
     self.reportPopup.eb:HighlightText()
@@ -581,6 +600,7 @@ function GB:RefreshSessionPrices()
             if newPrice ~= item.price then
                 item.price = newPrice
                 self.gphDirty = true
+                self:MarkProfitUiDirty()
             end
             if not item.quality then
                 local _, _, q = GetItemInfo(itemID)
@@ -619,56 +639,65 @@ function GB:EnsureProfitRows(count)
 end
 
 function GB:UpdateProfit()
-    local totalValue, rows = 0, {}
-    local byGroup, groupOrder, groupDisplay, groupedTotalValue = self:BuildCurrentProfitGroups(true)
-    local vendorValue, vendorCount = self:BuildVendorLootSummary()
-    totalValue = (groupedTotalValue or 0) + vendorValue
+    local totalValue = self.profitTotalValue or 0
+    local rows = self.profitRowCache or {}
 
-    for _, groupKey in ipairs(groupOrder) do
-        local variants = byGroup[groupKey]
-        table.sort(variants, function(a, b)
-            local la = self.gatherLookup and self.gatherLookup[a.itemID]
-            local lb = self.gatherLookup and self.gatherLookup[b.itemID]
-            return (la and la.tier or 0) < (lb and lb.tier or 0)
-        end)
+    if self.profitUiDirty or not self.profitRowCache then
+        totalValue, rows = 0, {}
+        local byGroup, groupOrder, groupDisplay, groupedTotalValue = self:BuildCurrentProfitGroups(true)
+        local vendorValue, vendorCount = self:BuildVendorLootSummary()
+        totalValue = (groupedTotalValue or 0) + vendorValue
 
-        local firstLookup = self.gatherLookup and variants[1] and self.gatherLookup[variants[1].itemID]
-        local multiQ = firstLookup and (firstLookup.totalTiers or 1) > 1
+        for _, groupKey in ipairs(groupOrder) do
+            local variants = byGroup[groupKey]
+            table.sort(variants, function(a, b)
+                local la = self.gatherLookup and self.gatherLookup[a.itemID]
+                local lb = self.gatherLookup and self.gatherLookup[b.itemID]
+                return (la and la.tier or 0) < (lb and lb.tier or 0)
+            end)
 
-        local lineValue, totalCount, parts = 0, 0, {}
-        local variantByID = {}
-        for _, item in ipairs(variants) do
-            variantByID[item.itemID] = item
-        end
+            local firstLookup = self.gatherLookup and variants[1] and self.gatherLookup[variants[1].itemID]
+            local multiQ = firstLookup and (firstLookup.totalTiers or 1) > 1
 
-        for _, item in ipairs(variants) do
-            local value = (item.price or 0) * item.count
-            lineValue = lineValue + value
-            totalCount = totalCount + item.count
-        end
-
-        if multiQ and firstLookup then
-            for _, tierID in ipairs(firstLookup.entry.ids) do
-                local tLookup = self.gatherLookup[tierID]
-                local tier = tLookup and tLookup.tier or 1
-                local dot = QUAL_ICON[tier] or string.format("[%d]", tier)
-                local cnt = variantByID[tierID] and variantByID[tierID].count or 0
-                table.insert(parts, string.format("%s x%d", dot, cnt))
+            local lineValue, totalCount, parts = 0, 0, {}
+            local variantByID = {}
+            for _, item in ipairs(variants) do
+                variantByID[item.itemID] = item
             end
+
+            for _, item in ipairs(variants) do
+                local value = (item.price or 0) * item.count
+                lineValue = lineValue + value
+                totalCount = totalCount + item.count
+            end
+
+            if multiQ and firstLookup then
+                for _, tierID in ipairs(firstLookup.entry.ids) do
+                    local tLookup = self.gatherLookup[tierID]
+                    local tier = tLookup and tLookup.tier or 1
+                    local dot = QUAL_ICON[tier] or string.format("[%d]", tier)
+                    local cnt = variantByID[tierID] and variantByID[tierID].count or 0
+                    table.insert(parts, string.format("%s x%d", dot, cnt))
+                end
+            end
+
+            local name = groupDisplay[groupKey] or groupKey
+            local countStr = multiQ and table.concat(parts, "  ") or ("x" .. totalCount)
+            local valueStr = lineValue > 0 and GB.FormatGoldSilver(lineValue) or "(no price)"
+            table.insert(rows, { left = string.format("%s  %s", name, countStr), right = valueStr })
         end
 
-        local name = groupDisplay[groupKey] or groupKey
-        local countStr = multiQ and table.concat(parts, "  ") or ("x" .. totalCount)
-        local valueStr = lineValue > 0 and GB.FormatGoldSilver(lineValue) or "(no price)"
-        table.insert(rows, { left = string.format("%s  %s", name, countStr), right = valueStr })
+        if vendorValue > 0 then
+            table.insert(rows, { left = string.format("Vendor loot  x%d", vendorCount), right = GB.FormatGoldSilver(vendorValue) })
+        end
+
+        self.profitRowCache = rows
+        self.profitTotalValue = totalValue
+        self.profitVisibleRowCount = #rows
+        self:EnsureProfitRows(#rows)
+        self.profitUiDirty = false
     end
 
-    if vendorValue > 0 then
-        table.insert(rows, { left = string.format("Vendor loot  x%d", vendorCount), right = GB.FormatGoldSilver(vendorValue) })
-    end
-
-    self.profitVisibleRowCount = #rows
-    self:EnsureProfitRows(#rows)
     self.profitMeta:SetText(string.format("Started: %s", date("%Y-%m-%d %H:%M", self.sessionStart)))
 
     local paused = self.sessionPaused
@@ -702,16 +731,12 @@ function GB:UpdateProfit()
     local sessionGold = math.floor(totalValue / 10000)
     local timerColor = paused and "|cffff4444" or "|cff44ff44"
     local timerStr = string.format("%s%s|r", timerColor, GB.FormatTime(elapsed))
-    if totalValue > 0 then
-        self.profitPanel.summary:SetText(string.format(
-            "|cffffd700%dg|r/Session  |cffffd700%dg|r/Hr  %s",
-            sessionGold,
-            gphGold,
-            timerStr
-        ))
-    else
-        self.profitPanel.summary:SetText(timerStr)
-    end
+    self.profitPanel.summary:SetText(string.format(
+        "|cffffd700%dg|r/Session  |cffffd700%dg|r/Hr  %s",
+        sessionGold,
+        gphGold,
+        timerStr
+    ))
 
     for i, row in ipairs(self.profitRows) do
         if rows[i] then

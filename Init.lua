@@ -25,8 +25,13 @@ function GB:SetManualHidden(hidden)
     if not self.db then
         return
     end
+    local wasHidden = self.db.manuallyHidden == true
     self.db.manuallyHidden = hidden and true or false
     self:RefreshMainFrameVisibility()
+    if wasHidden and not self.db.manuallyHidden and (#(self.profOrder or {}) > 0 or self.hasFishing) then
+        self:Rebuild()
+        self:UpdateBars()
+    end
 end
 
 function GB:CheckProfession()
@@ -109,6 +114,7 @@ function GB:Init()
             if InCombatLockdown() then
                 return
             end
+            GB.vitalsNeedsRefresh = true
             GB:UpdateBars()
         elseif event == "CHAT_MSG_LOOT" then
             GB:HandleLoot(arg1)
@@ -121,6 +127,9 @@ function GB:Init()
             GB:CheckProfession()
             GB:UpdateBars()
         elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
+            if event == "PLAYER_REGEN_ENABLED" then
+                GB.vitalsNeedsRefresh = true
+            end
             if GB.db.hideInCombat and event == "PLAYER_REGEN_ENABLED" then
                 GB:Rebuild()
                 GB:UpdateBars()
@@ -130,6 +139,13 @@ function GB:Init()
             end
             GB:RefreshMainFrameVisibility()
         else
+            if event == "SKILL_LINES_CHANGED"
+                or event == "SKILL_LINE_SPECS_RANKS_CHANGED"
+                or event == "SKILL_LINE_SPECS_UNLOCKED"
+                or event == "PLAYER_EQUIPMENT_CHANGED"
+                or event == "PLAYER_ENTERING_WORLD" then
+                GB:InvalidateProfessionStaticCache()
+            end
             GB:CheckProfession()
             GB:UpdateBars()
         end
@@ -138,10 +154,13 @@ function GB:Init()
     local tick = 0
     self.mainFrame:SetScript("OnUpdate", function(_, dt)
         tick = tick + dt
-        if tick >= 0.5 then
+        if tick >= 1.0 then
             tick = 0
             GB:CheckAutoInactivePause()
             if InCombatLockdown() then
+                return
+            end
+            if not (GB.mainFrame and GB.mainFrame:IsShown()) then
                 return
             end
             GB:UpdateBars()

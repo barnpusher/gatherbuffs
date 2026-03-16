@@ -1,5 +1,30 @@
 local _, GB = ...
 
+local KNOWN_TOOL_ENCHANT_BUFFS = {
+    [7367] = 458929, -- Ironclaw Razorstone Q1
+    [7368] = 458930, -- Ironclaw Razorstone Q2
+    [7369] = 458931, -- Ironclaw Razorstone Q3
+}
+
+local function BuffStatsMatchTotals(buff, totals)
+    if not (buff and buff.stats and totals) then
+        return false
+    end
+    local matched = false
+    for _, stat in ipairs(GATHERBUFFS_STAT_ORDER or {}) do
+        local expected = buff.stats[stat.id] or 0
+        local actual = totals[stat.id] or 0
+        if expected ~= actual then
+            if expected ~= 0 or actual ~= 0 then
+                return false
+            end
+        elseif expected ~= 0 then
+            matched = true
+        end
+    end
+    return matched
+end
+
 local function CheckEquipped(cat, buff, profID)
     if not cat.equippedGear then
         return nil
@@ -10,10 +35,19 @@ local function CheckEquipped(cat, buff, profID)
             local enchantInfo = GB.GetProfessionToolEnchantInfo(info)
             if enchantInfo and enchantInfo.hasEnchant then
                 local enchantName = enchantInfo.enchantName
+                local mappedSpellID = enchantInfo.enchantID and KNOWN_TOOL_ENCHANT_BUFFS[enchantInfo.enchantID]
+                if mappedSpellID and buff and buff.spellID and mappedSpellID == buff.spellID then
+                    return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
+                end
                 if enchantInfo.enchantID and buff and buff.spellID and enchantInfo.enchantID == buff.spellID then
                     return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
                 end
                 if enchantName and enchantName ~= "" and buff and buff.name and enchantName:find(buff.name, 1, true) then
+                    return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
+                end
+                local slots = GB.GetProfessionEquipmentSlotsFromInfo(info)
+                local enchantStats = slots and slots.tool and GB.GetInventorySlotEnchantStats(slots.tool) or nil
+                if BuffStatsMatchTotals(buff, enchantStats) then
                     return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
                 end
             end
@@ -139,17 +173,68 @@ function GB:HandleShardCurrencyUpdate(currencyType, quantity, quantityChange)
     end
 end
 
-function GB:GetSelectedBuff(catID)
+function GB:GetCategorySelectionKey(catID, profID)
     local db = self.db.categories[catID]
     if not db then
         return nil
     end
-    local buff = GB.GetBuffDef(catID, db.selectedKey)
+    if profID and db.selectedKeys and db.selectedKeys[profID] then
+        return db.selectedKeys[profID]
+    end
+    return db.selectedKey
+end
+
+function GB:GetCategoryEnabled(catID, profID)
+    local db = self.db.categories[catID]
+    if not db then
+        return false
+    end
+    if profID and db.enabledByProf and db.enabledByProf[profID] ~= nil then
+        return db.enabledByProf[profID] ~= false
+    end
+    return db.enabled ~= false
+end
+
+function GB:SetCategoryEnabled(catID, enabled, profID)
+    local db = self.db.categories[catID]
+    if not db then
+        return
+    end
+    if profID then
+        db.enabledByProf = db.enabledByProf or {}
+        db.enabledByProf[profID] = enabled and true or false
+    else
+        db.enabled = enabled and true or false
+    end
+    GB.vitalsNeedsRefresh = true
+end
+
+function GB:SetCategorySelectionKey(catID, selectedKey, profID)
+    local db = self.db.categories[catID]
+    if not db then
+        return
+    end
+    if profID then
+        db.selectedKeys = db.selectedKeys or {}
+        db.selectedKeys[profID] = selectedKey
+    else
+        db.selectedKey = selectedKey
+    end
+    GB.vitalsNeedsRefresh = true
+end
+
+function GB:GetSelectedBuff(catID, profID)
+    local db = self.db.categories[catID]
+    if not db then
+        return nil
+    end
+    local selectedKey = self:GetCategorySelectionKey(catID, profID)
+    local buff = GB.GetBuffDef(catID, selectedKey)
     if buff then
         return buff
     end
-    if type(db.selectedKey) == "string" then
-        local legacyID = tonumber(db.selectedKey:match(":(%d+)$"))
+    if type(selectedKey) == "string" then
+        local legacyID = tonumber(selectedKey:match(":(%d+)$"))
         if legacyID then
             buff = GB.GetBuffDefBySpellID(catID, legacyID)
             if not buff then
@@ -167,14 +252,14 @@ function GB:GetSelectedBuff(catID)
                 end
             end
             if buff then
-                db.selectedKey = GB.GetBuffKey(catID, buff)
+                self:SetCategorySelectionKey(catID, GB.GetBuffKey(catID, buff), profID)
                 return buff
             end
         end
     end
     buff = GB.GetBuffDefBySpellID(catID, db.spellID)
     if buff then
-        db.selectedKey = GB.GetBuffKey(catID, buff)
+        self:SetCategorySelectionKey(catID, GB.GetBuffKey(catID, buff), profID)
         return buff
     end
     local cat = GB.GetCatDef(catID)
@@ -191,17 +276,23 @@ function GB:GetRowBuff(catID, profID)
         if not buff then
             return nil, nil
         end
-        local aura = GB.GetPlayerAura(buff.spellID) or CheckEquipped(cat, buff, profID)
+        local aura = GB.GetPlayerAuraForBuff(buff) or CheckEquipped(cat, buff, profID)
+        if aura and not aura.equipped then
+            buff = GB.ResolveAuraBuff(catID, aura, profID, buff) or buff
+        end
         return buff, aura
     end
-    local selected, fallback = self:GetSelectedBuff(catID), nil
+    local selected, fallback = self:GetSelectedBuff(catID, profID), nil
     for _, buff in ipairs(cat.buffs) do
         if GB.BuffMatchesProfession(buff, profID) then
             if not fallback or (selected and GB.GetBuffKey(catID, buff) == GB.GetBuffKey(catID, selected)) then
                 fallback = buff
             end
-            local aura = GB.GetPlayerAura(buff.spellID) or CheckEquipped(cat, buff, profID)
+            local aura = GB.GetPlayerAuraForBuff(buff) or CheckEquipped(cat, buff, profID)
             if aura then
+                if not aura.equipped then
+                    buff = GB.ResolveAuraBuff(catID, aura, profID, buff) or buff
+                end
                 return buff, aura
             end
         end
@@ -235,7 +326,7 @@ function GB:UpdateSummary()
     end
     local active, maxTracked = 0, 0
     for _, row in ipairs(self.activeCommonRows or {}) do
-        local buff, aura = self:GetRowBuff(row.catID)
+        local buff, aura = self:GetRowBuff(row.catID, row.profID)
         if buff and buff.spellID then
             maxTracked = maxTracked + 1
             if aura then

@@ -40,6 +40,7 @@ GATHERBUFFS_CATEGORIES = {
             {
                 name = "Argentleaf Tea",
                 spellID = 1269152,  -- shared "Relaxed" aura
+                altSpellIDs = { 1269170 },
                 maxDuration = 3600,
                 itemIDs = { 242298 },
                 stats = { finesse = 50, speedPct = 3 },
@@ -48,6 +49,7 @@ GATHERBUFFS_CATEGORIES = {
             {
                 name = "Sanguithorn Tea",
                 spellID = 1269152,  -- shared "Relaxed" aura
+                altSpellIDs = { 1269170 },
                 maxDuration = 3600,
                 itemIDs = { 242299 },
                 stats = { perception = 50, speedPct = 3 },
@@ -56,6 +58,7 @@ GATHERBUFFS_CATEGORIES = {
             {
                 name = "Azeroot Tea",
                 spellID = 1269152,  -- shared "Relaxed" aura
+                altSpellIDs = { 1269170 },
                 maxDuration = 3600,
                 itemIDs = { 242301 },
                 stats = { deftness = 50, speedPct = 3 },

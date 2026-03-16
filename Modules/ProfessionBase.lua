@@ -159,9 +159,6 @@ function Base:GetMainCardBuffRowDefs()
     if overloadCatID then
         rows[#rows + 1] = { key = "overload", catID = overloadCatID }
     end
-    if self:UsesWeaponstone() and GB.GetCatDef("weaponstone") then
-        rows[#rows + 1] = { key = "weaponstone", catID = "weaponstone", profScoped = true }
-    end
     return rows
 end
 
@@ -260,11 +257,15 @@ function Base:GetStatSnapshot(addon)
     return GB.BuildProfessionStatSnapshot(addon, self.id, info)
 end
 
--- Returns the full live profession payload used by debug output and UI rendering.
-function Base:GetVitals(addon)
-    local info = self:GetDisplayInfo(addon)
-    if not info then
+function Base:GetStaticVitals(addon, info)
+    if not (addon and info) then
         return nil
+    end
+
+    local cache = addon:GetProfessionStaticCache(self.id)
+    local cacheVersion = addon.professionStaticCacheVersion or 0
+    if cache and cache.version == cacheVersion then
+        return cache
     end
 
     local slots = self:GetEquipmentSlots(addon, info) or { accessories = {} }
@@ -285,15 +286,66 @@ function Base:GetVitals(addon)
         }
     end
 
-    return {
-        info = info,
+    cache = {
+        version = cacheVersion,
         slots = slots,
         tool = tool,
         accessories = accessories,
         toolEnchant = self:GetToolEnchantInfo(addon, info),
         equipmentTotals = self:GetEquipmentTotals(addon, info),
-        apiTotals = self:GetApiTotals(addon, info),
-        statSnapshot = self:GetStatSnapshot(addon),
+    }
+    addon:SetProfessionStaticCache(self.id, cache)
+    return cache
+end
+
+-- Returns the full live profession payload used by debug output and UI rendering.
+function Base:GetVitals(addon)
+    local info = self:GetDisplayInfo(addon)
+    if not info then
+        return nil
+    end
+    local static = self:GetStaticVitals(addon, info) or {}
+    local apiTotals = self:GetApiTotals(addon, info)
+    local activeBuffs = self:GetBuffTotals(addon, true)
+    local maxBuffs = self:GetBuffTotals(addon, false)
+    local current = GB.MakeTotals()
+    local max = GB.MakeTotals()
+
+    if apiTotals then
+        for _, stat in ipairs(GATHERBUFFS_STAT_ORDER) do
+            local statID = stat.id
+            current[statID] = apiTotals[statID] or 0
+            max[statID] = apiTotals[statID] or 0
+        end
+        for _, stat in ipairs(GATHERBUFFS_STAT_ORDER) do
+            local statID = stat.id
+            max[statID] = (max[statID] or 0) + math.max(0, (maxBuffs[statID] or 0) - (activeBuffs[statID] or 0))
+        end
+    else
+        local baseline = static.equipmentTotals or GB.MakeTotals()
+        for _, stat in ipairs(GATHERBUFFS_STAT_ORDER) do
+            local statID = stat.id
+            current[statID] = (baseline[statID] or 0) + (activeBuffs[statID] or 0)
+            max[statID] = (baseline[statID] or 0) + (maxBuffs[statID] or 0)
+        end
+    end
+
+    current.speedPct = activeBuffs.speedPct or 0
+    max.speedPct = maxBuffs.speedPct or 0
+
+    return {
+        info = info,
+        slots = static.slots or { accessories = {} },
+        tool = static.tool,
+        accessories = static.accessories or {},
+        toolEnchant = static.toolEnchant,
+        equipmentTotals = static.equipmentTotals or GB.MakeTotals(),
+        apiTotals = apiTotals,
+        statSnapshot = {
+            current = current,
+            max = max,
+            hasLiveTotals = apiTotals ~= nil,
+        },
         buffStates = self:GetBuffStates(addon),
     }
 end

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+## 0.99.14
+
+- Reduced CPU usage, optimized a bunch of stuff
+- Fixed Argentleaf Tea aura/timer
+- Shared-aura phials are less likely to show the wrong selected quality
+- Split Razorstone handling properly between Mining and Herbalism
+- Moved Razorstone tracking into the global Buffs section, with separate rows for Mining and Herbalism.
+- Profit header shows reliably again
+- Main window refreshes properly
+- Fixed the report window so it remembers where you moved it instead of reopening in the center every time
+
 ## 0.99.13
 
 - Fixed the main panel collapse button so it properly opens and closes the addon sections

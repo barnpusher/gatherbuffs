@@ -74,15 +74,15 @@ local function MakeDropList(items, onPick)
     return list
 end
 
-local function MakeOptRow(parent, cat, yTop)
+local function MakeOptRow(parent, cat, yTop, profID)
     local row, db = CreateFrame("Frame", nil, parent), GB.db.categories[cat.id]
     row:SetPoint("TOPLEFT", PAD, yTop)
     row:SetSize(W + 20, 24)
     local cb = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
     cb:SetPoint("LEFT", 0, 0)
-    cb:SetChecked(db.enabled)
+    cb:SetChecked(GB:GetCategoryEnabled(cat.id, profID))
     cb:SetScript("OnClick", function(self)
-        GB.db.categories[cat.id].enabled = self:GetChecked()
+        GB:SetCategoryEnabled(cat.id, self:GetChecked(), profID)
         GB:Rebuild()
     end)
     local lbl = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -132,15 +132,17 @@ local function MakeOptRow(parent, cat, yTop)
         return label
     end
     local function refresh()
-        txt:SetText(GB.Trunc(BuffLabel(GB:GetSelectedBuff(cat.id)), 34))
+        txt:SetText(GB.Trunc(BuffLabel(GB:GetSelectedBuff(cat.id, profID)), 34))
     end
     refresh()
     local items = {}
     for _, buff in ipairs(cat.buffs) do
-        table.insert(items, { label = BuffLabel(buff), value = GB.GetBuffKey(cat.id, buff) })
+        if GB.BuffMatchesProfession(buff, profID) then
+            table.insert(items, { label = BuffLabel(buff), value = GB.GetBuffKey(cat.id, buff) })
+        end
     end
     local list = MakeDropList(items, function(value)
-        GB.db.categories[cat.id].selectedKey = value
+        GB:SetCategorySelectionKey(cat.id, value, profID)
         refresh()
         GB:UpdateBars()
     end)
@@ -558,6 +560,7 @@ function GB:BuildOptions()
                     function(value)
                         GB.db.modules.profitTracking[prof.id] = value and true or false
                         GB:CheckProfession()
+                        GB:MarkProfitUiDirty()
                         GB:UpdateProfit()
                     end)
                 y = y - 24
@@ -573,6 +576,7 @@ function GB:BuildOptions()
                     function(value)
                         GB.db.modules.profitTracking[prof.id] = value and true or false
                         GB:CheckProfession()
+                        GB:MarkProfitUiDirty()
                         GB:UpdateProfit()
                     end)
                 y = y - 24
@@ -585,6 +589,7 @@ function GB:BuildOptions()
             end,
             function(value)
                 GB.db.modules.profitVendorLoot = value and true or false
+                GB:MarkProfitUiDirty()
                 GB:UpdateProfit()
             end)
         y = y - 24
@@ -604,6 +609,7 @@ function GB:BuildOptions()
             end,
             function(value)
                 GB.db.modules.profitVendorLootExcludeGear = value and true or false
+                GB:MarkProfitUiDirty()
                 GB:UpdateProfit()
             end)
         y = y - 24
@@ -643,6 +649,7 @@ function GB:BuildOptions()
             end,
             function(value)
                 GB.db.modules.profitPriceSourceMode = value
+                GB:MarkProfitUiDirty()
                 GB:UpdateProfit()
             end)
 
@@ -665,6 +672,7 @@ function GB:BuildOptions()
             end,
             function(value)
                 GB.db.modules.profitPriceSource = value
+                GB:MarkProfitUiDirty()
                 GB:UpdateProfit()
             end,
             function()
@@ -680,7 +688,7 @@ function GB:BuildOptions()
             for i, catID in ipairs(catList) do
                 local cat = GB.GetCatDef(catID)
                 if cat then
-                    MakeOptRow(pc, cat, -(28 * i))
+                    MakeOptRow(pc, cat, -(28 * i), td.prof.id)
                 end
             end
         end

@@ -540,9 +540,21 @@ function GB:BuildStaticUI()
     self.combatText:Hide()
     self.commonRows = {}
     for _, cat in ipairs(GATHERBUFFS_CATEGORIES) do
-        if cat.scope == "common" then
+        if cat.scope == "common" and cat.id ~= "weaponstone" then
             self.commonRows[cat.id] = MakeRow(self.commonPanel.content, cat)
             self.commonRows[cat.id]:Hide()
+        end
+    end
+    self.commonWeaponstoneRows = {}
+    local weaponstoneCat = GB.GetCatDef("weaponstone")
+    if weaponstoneCat then
+        for _, prof in ipairs(GB.GetProfessionDefs()) do
+            if prof:UsesWeaponstone() then
+                local row = MakeRow(self.commonPanel.content, weaponstoneCat, prof.id)
+                row.lbl:SetText(prof:GetLabel())
+                row:Hide()
+                self.commonWeaponstoneRows[prof.id] = row
+            end
         end
     end
     self.shardRow = MakeRow(self.commonPanel.content, { id = "shard_of_dundun", label = "Shard" })
@@ -692,20 +704,38 @@ local function ApplyRow(row, buff, aura)
     local count = GB.GetBuffCount(buff)
 
     local mods = GB.db and GB.db.modules
+    GB.alertState = GB.alertState or {}
+    local buffKey = buff and GB.GetBuffKey(row.catID, buff) or row.catID
+    local stateKey = string.format("%s:%s:%s", row.catID or "?", row.profID or "common", buffKey or "?")
+    local state = GB.alertState[stateKey] or {}
     if mods and mods.alertOnBuffExpiry then
         local isBuffed = (aura ~= nil) and (buff ~= nil)
-        if row.lastWasBuffed == true and not isBuffed and buff then
+        if state.lastWasBuffed == true and not isBuffed and buff then
             PlaySound(SOUNDKIT.AUCTION_WINDOW_CLOSE)
             print("|cffaaffaaGatherBuffs:|r " .. (buff.name or "Buff") .. " has expired.")
         end
-        row.lastWasBuffed = isBuffed
+        state.lastWasBuffed = isBuffed
     end
 
     if mods and mods.alertOnLowStock and count ~= nil then
-        if row.lastCount ~= nil and row.lastCount > 0 and count == 0 and buff then
+        if state.lastCount ~= nil and state.lastCount > 0 and count == 0 and buff then
             print("|cffff6644GatherBuffs:|r " .. (buff.name or "Consumable") .. " - out of stock!")
         end
-        row.lastCount = count
+        state.lastCount = count
+    end
+    GB.alertState[stateKey] = state
+
+    -- If detected via equipped-enchant fallback, scan for the actual timed aura so duration is shown
+    if aura and aura.equipped and catDef then
+        for _, catBuff in ipairs(catDef.buffs or {}) do
+            local realAura = GB.GetPlayerAuraForBuff(catBuff)
+            if realAura and realAura.expirationTime and realAura.expirationTime > 0 then
+                aura = realAura
+                buff = catBuff
+                count = GB.GetBuffCount(catBuff)
+                break
+            end
+        end
     end
 
     if count ~= nil then
@@ -844,8 +874,8 @@ function GB:Rebuild()
     local commonStart = 4
     local n = 0
     for _, cat in ipairs(GATHERBUFFS_CATEGORIES) do
-        if cat.scope == "common" then
-            local row, db = self.commonRows[cat.id], self.db.categories[cat.id]
+        if cat.scope == "common" and cat.id ~= "weaponstone" then
+            local row = self.commonRows[cat.id]
             local profOK = true
             if cat.professions then
                 profOK = false
@@ -856,7 +886,7 @@ function GB:Rebuild()
                     end
                 end
             end
-            if db and db.enabled and profOK then
+            if self:GetCategoryEnabled(cat.id) and profOK then
                 row:ClearAllPoints()
                 row:SetPoint("TOPLEFT", self.commonPanel.content, "TOPLEFT", PAD, -(commonStart + n * (ROW_H + 3)))
                 row:SetWidth(W - PAD * 4)
@@ -866,6 +896,28 @@ function GB:Rebuild()
                 n = n + 1
             else
                 row:Hide()
+            end
+        end
+    end
+    if self.commonWeaponstoneRows then
+        for _, prof in ipairs(GB.GetProfessionDefs()) do
+            local row = self.commonWeaponstoneRows[prof.id]
+            if row then
+                local rowEnabled = self:GetCategoryEnabled("weaponstone", prof.id)
+                    and prof:UsesWeaponstone()
+                    and self:IsProfessionAvailable(prof.id)
+                    and self:IsProfessionModuleEnabled(prof.id)
+                if rowEnabled then
+                    row:ClearAllPoints()
+                    row:SetPoint("TOPLEFT", self.commonPanel.content, "TOPLEFT", PAD, -(commonStart + n * (ROW_H + 3)))
+                    row:SetWidth(W - PAD * 4)
+                    row:SetHeight(ROW_H)
+                    row:SetShown(self.db.modules.globalExpanded)
+                    table.insert(activeCommon, row)
+                    n = n + 1
+                else
+                    row:Hide()
+                end
             end
         end
     end
@@ -913,8 +965,7 @@ function GB:Rebuild()
             local rowY = prof:UsesSimpleSkillSummary() and 56 or (showNodes and 72 or 56)
             for _, rowDef in ipairs(card.buffRowDefs or {}) do
                 local row = card.buffRows and card.buffRows[rowDef.key]
-                local catDB = self.db.categories[rowDef.catID]
-                local rowEnabled = row and catDB and catDB.enabled
+                local rowEnabled = row and self:GetCategoryEnabled(rowDef.catID, rowDef.profScoped and prof.id or nil)
                 if row then
                     row:ClearAllPoints()
                     row:SetPoint("TOPLEFT", card.content, "TOPLEFT", PAD, -rowY)
@@ -983,11 +1034,41 @@ function GB:Rebuild()
 end
 
 function GB:UpdateBars()
+    if not (self.mainFrame and self.mainFrame:IsShown()) then
+        return
+    end
+
+    -- Rebuild aura snapshot and vitals cache when dirty, but only outside combat.
+    -- NOTE: In Midnight, aura APIs (GetPlayerAuraBySpellID etc.) are callable in combat
+    -- but return nil, so rebuilding during combat would wipe the last known state.
+    -- The pre-combat snapshot intentionally persists as a read-only cache during combat;
+    -- expirationTime values are absolute timestamps so countdown math stays correct.
+    -- DO NOT remove the InCombatLockdown() guard.
+    if (GB.vitalsNeedsRefresh or not GB.auraSnapshot) and not InCombatLockdown() then
+        GB.auraSnapshot = {}
+        if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+            for _, cat in ipairs(GATHERBUFFS_CATEGORIES) do
+                for _, buff in ipairs(cat.buffs or {}) do
+                    for _, sid in ipairs(GB.GetBuffSpellIDs(buff)) do
+                        if sid and not GB.auraSnapshot[sid] then
+                            local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, sid)
+                            if ok and aura then
+                                GB.auraSnapshot[sid] = aura
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        GB.cachedProfVitals = {}
+        GB.vitalsNeedsRefresh = false
+    end
+
     self:UpdateSummary()
     local inCombat = InCombatLockdown()
     for _, row in ipairs(self.activeCommonRows or {}) do
         if not inCombat then
-            ApplyRow(row, self:GetRowBuff(row.catID))
+            ApplyRow(row, self:GetRowBuff(row.catID, row.profID))
         end
     end
     local shardInfo = GB.GetShardOfDundunInfo()
@@ -1002,9 +1083,14 @@ function GB:UpdateBars()
     if not inCombat and self.currencyShardRow and self.db.modules.dundunExpanded and shardEnabled then
         ApplyCurrencyRow(self.currencyShardRow, shardInfo)
     end
+    GB.cachedProfVitals = GB.cachedProfVitals or {}
     for _, prof in ipairs(GB.GetProfessionDefs()) do
         local card = self.profCards and self.profCards[prof.id]
-        local vitals = card and prof:GetVitals(self) or nil
+        local vitals = GB.cachedProfVitals[prof.id]
+        if not vitals and card then
+            vitals = prof:GetVitals(self)
+            GB.cachedProfVitals[prof.id] = vitals
+        end
         local info = vitals and vitals.info or nil
         if card and info then
             card.title:SetText(info.label)
