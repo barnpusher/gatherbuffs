@@ -1,11 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.99.12
 
 - Expanded the profession-module refactor with a documented `ProfessionBase` contract and moved more UI, settings, and profit behavior behind profession methods
 - Reworked the Info popup to show current professions, tools, enchants, accessories, and live stat summaries instead of price-source info
 - Added Midnight profession gear catalogs for module-aware tool and accessory highlighting, plus improved profession gear slot inference from item tooltips
 - Added Tailoring bolt tracking so crafted Midnight bolts appear in Tailoring profit tracking
+- Folded the old `Professions.lua` facade into `Core.lua` and removed the extra module layer
+- Fixed main panel collapse toggling and refreshed the README feature/command documentation
 
 ## 0.99.11
 

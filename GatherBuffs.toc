@@ -2,7 +2,7 @@
 ## Title: GatherBuffs
 ## Notes: Tracks gathering and consumable buff timers for Midnight
 ## Author: Barnpusher
-## Version: 0.99.11
+## Version: 0.99.12
 ## X-Curse-Project-ID: 1486906
 ## SavedVariables: GatherBuffsDB
 ## SavedVariablesPerCharacter: GatherBuffsCharDB
@@ -17,7 +17,6 @@ Modules\Fishing.lua
 Modules\Tailoring.lua
 Modules\Enchanting.lua
 Modules\Buffs.lua
-Modules\Professions.lua
 Modules\Profit.lua
 Ui.lua
 Options.lua

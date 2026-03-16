@@ -32,7 +32,7 @@ local function CheckEquipped(cat, buff, profID)
 end
 
 function GB:ToggleMainCollapsed()
-    self.db.modules.mainCollapsed = false
+    self.db.modules.mainCollapsed = not self.db.modules.mainCollapsed
 end
 
 function GB:MigrateDB()
