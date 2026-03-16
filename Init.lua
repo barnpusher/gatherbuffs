@@ -94,8 +94,18 @@ function GB:Init()
     evf:RegisterEvent("PLAYER_ENTERING_WORLD")
     evf:RegisterEvent("PLAYER_REGEN_ENABLED")
     evf:RegisterEvent("PLAYER_REGEN_DISABLED")
+    evf:RegisterEvent("MERCHANT_SHOW")
+    evf:RegisterEvent("MERCHANT_CLOSED")
     evf:SetScript("OnEvent", function(_, event, arg1, arg2, arg3)
-        if event == "UNIT_AURA" and arg1 == "player" then
+        if event == "MERCHANT_SHOW" then
+            GB.merchantIsOpen = true
+            GB.lastLootAt = time()
+            return
+        elseif event == "MERCHANT_CLOSED" then
+            GB.merchantIsOpen = false
+            GB.lastLootAt = time()
+            return
+        elseif event == "UNIT_AURA" and arg1 == "player" then
             if InCombatLockdown() then
                 return
             end
@@ -130,6 +140,7 @@ function GB:Init()
         tick = tick + dt
         if tick >= 0.5 then
             tick = 0
+            GB:CheckAutoInactivePause()
             if InCombatLockdown() then
                 return
             end
@@ -154,6 +165,13 @@ SlashCmdList.GATHERBUFFS = function(msg)
     elseif msg == "reset" then
         GB:ResetMainPosition()
         print("|cffaaffaaGatherBuffs|r: Position reset.")
+    elseif msg == "newsession" then
+        GB:ResetSession()
+        GB:UpdateProfit()
+        print("|cffaaffaaGatherBuffs|r: New session started.")
+    elseif msg == "copy" then
+        local lines = GB:BuildProfitReportLines()
+        GB:ShowDebugWindow(table.concat(lines, "\n"))
     elseif msg == "lootlog" then
         GB:ToggleLootLog()
     elseif msg == "lootdebug" then
@@ -255,7 +273,7 @@ SlashCmdList.GATHERBUFFS = function(msg)
             end
         end
     else
-        print("|cffaaffaaGatherBuffs|r: /gb [toggle|config|reset|debug|lootdebug|lootlog]")
+        print("|cffaaffaaGatherBuffs|r: /gb [toggle|config|reset|newsession|copy|debug|lootdebug|lootlog]")
     end
 end
 

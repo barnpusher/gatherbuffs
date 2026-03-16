@@ -132,6 +132,7 @@ function GB:TogglePause()
         local pausedAt = self.sessionPausedAt or self.sessionStart or time()
         self.sessionPausedTotal = (self.sessionPausedTotal or 0) + (time() - pausedAt)
         self.sessionPaused = false
+        self.lastLootAt = time()
     else
         self.sessionPausedAt = time()
         self.sessionPaused = true
@@ -151,8 +152,31 @@ function GB:MaybeAutoStartSession()
     self.sessionPausedTotal = (self.sessionPausedTotal or 0) + (time() - pausedAt)
     self.sessionPaused = false
     self.sessionPausedAt = 0
+    self.lastLootAt = time()
     self:SaveSessionState()
     return true
+end
+
+function GB:CheckAutoInactivePause()
+    if not (self.db and self.db.modules and self.db.modules.profitAutoInactivePause) then
+        return
+    end
+    if self.sessionPaused then
+        return
+    end
+    if self.merchantIsOpen then
+        return
+    end
+    if not self.lastLootAt then
+        return
+    end
+    local threshold = (self.db.modules.profitAutoInactivePauseMinutes or 5) * 60
+    if time() - self.lastLootAt >= threshold then
+        self.sessionPausedAt = time()
+        self.sessionPaused = true
+        self:SaveSessionState()
+        self:UpdateProfit()
+    end
 end
 
 function GB:ResetSession()
@@ -1242,9 +1266,10 @@ function GB:HandleLoot(msg)
         local itemID = tonumber(itemLink:match("item:(%d+)"))
         local amount = tonumber(countText) or 1
         if itemID then
+            self.lastLootAt = time()
             local ignored = GATHERBUFFS_LOOT_IGNORE and GATHERBUFFS_LOOT_IGNORE[itemID]
-            local isGatherMat = GB.IsGatheringMat(itemID, trackedProfMap, self.gatherLookup)
-            local isVendorItem = not ignored and self:ShouldIncludeVendorLootItem(itemID)
+            local isGatherMat = not GB.merchantIsOpen and GB.IsGatheringMat(itemID, trackedProfMap, self.gatherLookup)
+            local isVendorItem = not ignored and not GB.merchantIsOpen and self:ShouldIncludeVendorLootItem(itemID)
             local countsForProfit = not ignored and (isGatherMat or isVendorItem)
             if countsForProfit then
                 self:MaybeAutoStartSession()
@@ -1274,7 +1299,7 @@ function GB:HandleLoot(msg)
                 if self.lootDebug then
                     print("|cffaaffaaGB skipped:|r id=" .. itemID .. " x" .. amount .. " (session paused)")
                 end
-            elseif not ignored then
+            elseif not ignored and not GB.merchantIsOpen then
                 if not GetItemInfo(itemID) then
                     self.pendingLoot = self.pendingLoot or {}
                     table.insert(self.pendingLoot, { itemID = itemID, amount = amount, link = itemLink })
@@ -1306,6 +1331,7 @@ function GB:ProcessPendingLoot()
                 local activeForProfit = not self.sessionPaused
                 self:TrackLoot(entry.itemID, entry.amount, entry.link, activeForProfit)
                 if activeForProfit then
+                    self.lastLootAt = time()
                     tracked = true
                 end
             end

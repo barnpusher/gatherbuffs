@@ -43,6 +43,8 @@ World of Warcraft/_retail_/Interface/AddOns/
 - `/gb toggle` toggles the main window
 - `/gb config` opens settings
 - `/gb reset` resets the window position
+- `/gb newsession` starts a fresh session
+- `/gb copy` opens a copyable text window of the current session report
 - `/gb debug` prints addon state for troubleshooting
 - `/gb lootdebug` toggles loot debug mode
 - `/gb lootlog` prints the recent loot debug log

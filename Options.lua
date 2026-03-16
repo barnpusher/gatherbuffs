@@ -447,14 +447,18 @@ function GB:BuildOptions()
             function() return GB.lootDebug or false end,
             function(value) GB.lootDebug = value end)
 
-        MakeSliderOptRow(gc, "Background Opacity", -106, 0.00, 1.00, 0.01,
+        MakeBoolOptRow(gc, "Alert when buff expires", -96,
+            function() return GB.db.modules.alertOnBuffExpiry == true end,
+            function(value) GB.db.modules.alertOnBuffExpiry = value and true or false end)
+
+        MakeSliderOptRow(gc, "Background Opacity", -130, 0.00, 1.00, 0.01,
             function() return GB.db.ui.backgroundOpacity or GB.DEFAULTS.ui.backgroundOpacity end,
             function(value)
                 GB.db.ui.backgroundOpacity = value
                 GB:ApplyUiSettings()
             end)
 
-        MakeSliderOptRow(gc, "Bars Opacity", -150, 0.00, 1.00, 0.01,
+        MakeSliderOptRow(gc, "Bars Opacity", -174, 0.00, 1.00, 0.01,
             function() return GB.db.ui.barOpacity or GB.db.ui.rowOpacity or GB.DEFAULTS.ui.barOpacity or GB.DEFAULTS.ui.rowOpacity end,
             function(value)
                 GB.db.ui.barOpacity = value
@@ -463,7 +467,7 @@ function GB:BuildOptions()
                 GB:UpdateBars()
             end)
 
-        MakeSliderOptRow(gc, "Text Opacity", -194, 0.00, 1.00, 0.01,
+        MakeSliderOptRow(gc, "Text Opacity", -218, 0.00, 1.00, 0.01,
             function() return GB.db.ui.textOpacity or GB.DEFAULTS.ui.textOpacity end,
             function(value)
                 GB.db.ui.textOpacity = value
@@ -471,7 +475,7 @@ function GB:BuildOptions()
                 GB:UpdateBars()
             end)
 
-        MakeSliderOptRow(gc, "UI Scale", -238, 0.50, 1.50, 0.05,
+        MakeSliderOptRow(gc, "UI Scale", -262, 0.50, 1.50, 0.05,
             function() return GB.db.ui.scale or GB.DEFAULTS.ui.scale end,
             function(value)
                 GB.db.ui.scale = value
@@ -488,6 +492,9 @@ function GB:BuildOptions()
                 MakeOptRow(cc, cat, -(28 * (i - 1)))
             end
         end
+        MakeBoolOptRow(cc, "Alert when consumable runs out", -124,
+            function() return GB.db.modules.alertOnLowStock == true end,
+            function(value) GB.db.modules.alertOnLowStock = value and true or false end)
     end
 
     do
@@ -563,6 +570,31 @@ function GB:BuildOptions()
             function(value)
                 GB.db.modules.profitVendorLootExcludeGear = value and true or false
                 GB:UpdateProfit()
+            end)
+        y = y - 24
+
+        MakeBoolOptRow(pc, "Auto-pause when inactive", y,
+            function()
+                return GB.db.modules.profitAutoInactivePause == true
+            end,
+            function(value)
+                GB.db.modules.profitAutoInactivePause = value and true or false
+            end)
+        y = y - 24
+
+        local inactiveItems = {
+            { label = "2 min",  value = 2  },
+            { label = "5 min",  value = 5  },
+            { label = "10 min", value = 10 },
+            { label = "15 min", value = 15 },
+            { label = "30 min", value = 30 },
+        }
+        MakeChoiceOptRow(pc, "Inactivity threshold", y, inactiveItems,
+            function()
+                return GB.db.modules.profitAutoInactivePauseMinutes or 5
+            end,
+            function(value)
+                GB.db.modules.profitAutoInactivePauseMinutes = value
             end)
         y = y - 24
 

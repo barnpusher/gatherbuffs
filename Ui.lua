@@ -709,6 +709,24 @@ end
 local function ApplyRow(row, buff, aura)
     local catDef = GB.GetCatDef(row.catID)
     local count = GB.GetBuffCount(buff)
+
+    local mods = GB.db and GB.db.modules
+    if mods and mods.alertOnBuffExpiry then
+        local isBuffed = (aura ~= nil) and (buff ~= nil)
+        if row.lastWasBuffed == true and not isBuffed and buff then
+            PlaySound(SOUNDKIT.AUCTION_WINDOW_CLOSE)
+            print("|cffaaffaaGatherBuffs:|r " .. (buff.name or "Buff") .. " has expired.")
+        end
+        row.lastWasBuffed = isBuffed
+    end
+
+    if mods and mods.alertOnLowStock and count ~= nil then
+        if row.lastCount ~= nil and row.lastCount > 0 and count == 0 and buff then
+            print("|cffff6644GatherBuffs:|r " .. (buff.name or "Consumable") .. " - out of stock!")
+        end
+        row.lastCount = count
+    end
+
     if count ~= nil then
         row.cnt:SetText("(" .. count .. ")")
         row.cnt:SetTextColor(count == 0 and 0.80 or 0.55, count == 0 and 0.30 or 0.55, count == 0 and 0.30 or 0.55)

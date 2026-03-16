@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Fixed `ToggleMainCollapsed` always setting collapsed to false instead of toggling
+- Fixed vendor purchases being tracked as profit loot by ignoring loot events while a merchant window is open, including deferred pending-loot entries
+- Added auto-pause on inactivity: session pauses automatically after a configurable period with no tracked loot, with pause suppressed while a merchant is open
+- Added optional alerts for buff expiry and consumable running out of stock
+- Added `/gb newsession` slash command to reset the session without opening settings
+- Added `/gb copy` slash command to open a copyable session report window
+- Updated README feature list and command documentation
+
 ## 0.99.12
 
 - Expanded the profession-module refactor with a documented `ProfessionBase` contract and moved more UI, settings, and profit behavior behind profession methods
