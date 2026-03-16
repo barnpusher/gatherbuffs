@@ -601,6 +601,121 @@ function GB:PrintProfitReportToConsole()
     end
 end
 
+function GB:ToggleReportPopup()
+    if not self.reportPopup then
+        local FW, FH = 500, 360
+        local f = CreateFrame("Frame", "GBReportPopup", UIParent, "BackdropTemplate")
+        f:SetSize(FW, FH)
+        f:SetFrameStrata("HIGH")
+        f:SetMovable(true)
+        f:EnableMouse(true)
+        f:RegisterForDrag("LeftButton")
+        f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+        f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+        f:SetBackdrop({
+            bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+            edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 10,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        f:SetBackdropColor(0.05, 0.06, 0.09, 0.95)
+        f:SetBackdropBorderColor(0.55, 0.75, 0.95, 0.90)
+
+        local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        title:SetPoint("TOPLEFT", 8, -8)
+        title:SetText("GatherBuffs - Report")
+        title:SetTextColor(0.55, 0.75, 0.95)
+
+        local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+        closeBtn:SetPoint("TOPRIGHT", 2, 2)
+        closeBtn:SetScript("OnClick", function() f:Hide() end)
+
+        local function CreateActionButton(point, relativeTo, relativePoint, x, y, text, width, onClick, r, g, b, br, bg, bb)
+            local btn = CreateFrame("Button", nil, f, "BackdropTemplate")
+            btn:SetPoint(point, relativeTo, relativePoint, x, y)
+            btn:SetSize(width, 18)
+            btn:SetBackdrop({
+                bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+                edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+                tile = true, tileSize = 8, edgeSize = 6,
+                insets = { left = 1, right = 1, top = 1, bottom = 1 },
+            })
+            btn:SetBackdropColor(r, g, b, 0.92)
+            btn:SetBackdropBorderColor(br, bg, bb)
+            local fs = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            fs:SetAllPoints()
+            fs:SetText(text)
+            fs:SetTextColor(0.88, 0.90, 0.96)
+            btn:SetScript("OnClick", onClick)
+            return btn
+        end
+
+        local consoleBtn = CreateActionButton(
+            "TOPRIGHT", f, "TOPRIGHT", -28, -8,
+            "Console",
+            56,
+            function()
+                GB:PrintProfitReportToConsole()
+            end,
+            0.16, 0.12, 0.22,
+            0.42, 0.30, 0.62
+        )
+        local partyBtn = CreateActionButton(
+            "TOPRIGHT", consoleBtn, "TOPLEFT", -4, 0,
+            "Party",
+            48,
+            function()
+                GB:SendProfitReportToChat()
+            end,
+            0.10, 0.14, 0.22,
+            0.24, 0.38, 0.62
+        )
+
+        local scroll = CreateFrame("ScrollFrame", "GBReportScroll", f, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -30)
+        scroll:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -28, 8)
+
+        local eb = CreateFrame("EditBox", "GBReportEB", f)
+        eb:SetMultiLine(true)
+        eb:SetAutoFocus(false)
+        eb:SetFontObject("GameFontNormalSmall")
+        eb:SetTextColor(0.88, 0.90, 0.88)
+        eb:SetWidth(FW - 36)
+        eb:SetHeight(1)
+        eb:SetMaxLetters(0)
+        eb:EnableMouse(true)
+        eb:SetScript("OnEscapePressed", function() f:Hide() end)
+        scroll:SetScrollChild(eb)
+
+        f.eb = eb
+        f.scroll = scroll
+        f.partyBtn = partyBtn
+        f.consoleBtn = consoleBtn
+        f:Hide()
+        self.reportPopup = f
+    end
+
+    if self.reportPopup:IsShown() then
+        self.reportPopup:Hide()
+        return
+    end
+
+    local lines = self:BuildProfitReportLines()
+    self.reportPopup.eb:SetText(table.concat(lines, "\n"))
+    self.reportPopup:ClearAllPoints()
+    self.reportPopup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    self.reportPopup:Show()
+    self.reportPopup.eb:SetFocus()
+    self.reportPopup.eb:HighlightText()
+    C_Timer.After(0.05, function()
+        if self.reportPopup and self.reportPopup.scroll then
+            self.reportPopup.scroll:SetVerticalScroll(0)
+        end
+    end)
+end
+
 function GB:RefreshSessionPrices()
     for _, itemID in ipairs(self.sessionOrder) do
         local item = self.sessionLoot[itemID]

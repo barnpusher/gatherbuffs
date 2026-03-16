@@ -284,8 +284,7 @@ function GB:ApplyUiSettings()
     SetTextAlpha(self.profitMeta)
     SetTextAlpha(self.profitPauseTxt)
     SetTextAlpha(self.profitResetTxt)
-    SetTextAlpha(self.profitPartyTxt)
-    SetTextAlpha(self.profitConsoleTxt)
+    SetTextAlpha(self.profitReportTxt)
 
     for _, row in pairs(self.commonRows or {}) do
         ApplyRowTextAlpha(row)
@@ -647,41 +646,23 @@ function GB:BuildStaticUI()
     self.profitPauseTxt:SetTextColor(0.70, 0.92, 0.70)
     self.profitPauseBtn:SetScript("OnClick", function() GB:TogglePause() end)
 
-    self.profitPartyBtn = CreateFrame("Button", nil, self.profitPanel.content, "BackdropTemplate")
-    self.profitPartyBtn:SetPoint("TOPRIGHT", self.profitPauseBtn, "TOPLEFT", -4, 0)
-    self.profitPartyBtn:SetSize(52, 18)
-    self.profitPartyBtn:SetBackdrop({
+    self.profitReportBtn = CreateFrame("Button", nil, self.profitPanel.content, "BackdropTemplate")
+    self.profitReportBtn:SetPoint("TOPRIGHT", self.profitPauseBtn, "TOPLEFT", -4, 0)
+    self.profitReportBtn:SetSize(58, 18)
+    self.profitReportBtn:SetBackdrop({
         bgFile = "Interface/Tooltips/UI-Tooltip-Background",
         edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
         tile = true, tileSize = 8, edgeSize = 6,
         insets = { left = 1, right = 1, top = 1, bottom = 1 },
     })
-    self.profitPartyBtn:SetBackdropColor(0.10, 0.14, 0.22, 0.92)
-    self.profitPartyBtn:SetBackdropBorderColor(0.24, 0.38, 0.62)
-    local partyText = self.profitPartyBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    partyText:SetAllPoints()
-    partyText:SetText("Report")
-    partyText:SetTextColor(0.72, 0.82, 0.96)
-    self.profitPartyTxt = partyText
-    self.profitPartyBtn:SetScript("OnClick", function() GB:SendProfitReportToChat() end)
-
-    self.profitConsoleBtn = CreateFrame("Button", nil, self.profitPanel.content, "BackdropTemplate")
-    self.profitConsoleBtn:SetPoint("TOPRIGHT", self.profitPartyBtn, "TOPLEFT", -4, 0)
-    self.profitConsoleBtn:SetSize(56, 18)
-    self.profitConsoleBtn:SetBackdrop({
-        bgFile = "Interface/Tooltips/UI-Tooltip-Background",
-        edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-        tile = true, tileSize = 8, edgeSize = 6,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    self.profitConsoleBtn:SetBackdropColor(0.16, 0.12, 0.22, 0.92)
-    self.profitConsoleBtn:SetBackdropBorderColor(0.42, 0.30, 0.62)
-    local consoleText = self.profitConsoleBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    consoleText:SetAllPoints()
-    consoleText:SetText("Console")
-    consoleText:SetTextColor(0.84, 0.78, 0.96)
-    self.profitConsoleTxt = consoleText
-    self.profitConsoleBtn:SetScript("OnClick", function() GB:PrintProfitReportToConsole() end)
+    self.profitReportBtn:SetBackdropColor(0.10, 0.14, 0.22, 0.92)
+    self.profitReportBtn:SetBackdropBorderColor(0.24, 0.38, 0.62)
+    local reportText = self.profitReportBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    reportText:SetAllPoints()
+    reportText:SetText("Report")
+    reportText:SetTextColor(0.72, 0.82, 0.96)
+    self.profitReportTxt = reportText
+    self.profitReportBtn:SetScript("OnClick", function() GB:ToggleReportPopup() end)
     self.profitRows = {}
     self.profitVisibleRowCount = 0
     self:EnsureProfitRows(0)

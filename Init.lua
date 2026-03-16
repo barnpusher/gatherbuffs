@@ -170,8 +170,7 @@ SlashCmdList.GATHERBUFFS = function(msg)
         GB:UpdateProfit()
         print("|cffaaffaaGatherBuffs|r: New session started.")
     elseif msg == "copy" then
-        local lines = GB:BuildProfitReportLines()
-        GB:ShowDebugWindow(table.concat(lines, "\n"))
+        GB:ToggleReportPopup()
     elseif msg == "lootlog" then
         GB:ToggleLootLog()
     elseif msg == "lootdebug" then
