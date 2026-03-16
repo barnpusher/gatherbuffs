@@ -1038,7 +1038,11 @@ function GB:ToggleInfoPopup()
         f:EnableMouse(true)
         f:RegisterForDrag("LeftButton")
         f:SetScript("OnDragStart", function(self) self:StartMoving() end)
-        f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+        f:SetScript("OnDragStop", function(self)
+            self:StopMovingOrSizing()
+            GB.db.infoX = self:GetLeft()
+            GB.db.infoY = self:GetTop()
+        end)
         f:SetBackdrop({
             bgFile = "Interface/Tooltips/UI-Tooltip-Background",
             edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
@@ -1072,6 +1076,7 @@ function GB:ToggleInfoPopup()
         eb:SetScript("OnEscapePressed", function() f:Hide() end)
         scroll:SetScrollChild(eb)
         f.eb, f.scroll = eb, scroll
+        f:Hide()
         self.infoPopup = f
     end
     if self.infoPopup:IsShown() then
@@ -1079,7 +1084,11 @@ function GB:ToggleInfoPopup()
     else
         self.infoPopup.eb:SetText(self:GetCharacterProfessionInfo())
         self.infoPopup:ClearAllPoints()
-        self.infoPopup:SetPoint("TOPLEFT", self.mainFrame, "TOPRIGHT", 8, 0)
+        if self.db.infoX and self.db.infoY then
+            self.infoPopup:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", self.db.infoX, self.db.infoY)
+        else
+            self.infoPopup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+        end
         self.infoPopup:Show()
         C_Timer.After(0.05, function()
             if self.infoPopup and self.infoPopup.scroll then
