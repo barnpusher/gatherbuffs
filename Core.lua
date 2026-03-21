@@ -1528,6 +1528,20 @@ function GB.GetItemLinkEnchantID(itemLink)
     return nil
 end
 
+local KNOWN_TOOL_ENCHANT_SPELLS = {
+    [7367] = 458929, -- Ironclaw Razorstone Q1
+    [7368] = 458930, -- Ironclaw Razorstone Q2
+    [7369] = 458931, -- Ironclaw Razorstone Q3
+}
+
+function GB.GetToolEnchantSpellID(enchantID)
+    enchantID = tonumber(enchantID)
+    if not enchantID or enchantID <= 0 then
+        return nil
+    end
+    return KNOWN_TOOL_ENCHANT_SPELLS[enchantID]
+end
+
 function GB.GetProfessionToolEnchantInfoFromInfo(info)
     local slots = GB.GetProfessionEquipmentSlotsFromInfo(info)
     if not slots or not slots.tool then
@@ -1539,14 +1553,15 @@ function GB.GetProfessionToolEnchantInfoFromInfo(info)
         return { hasEnchant = false, itemLink = itemLink }
     end
 
+    local spellID = GB.GetToolEnchantSpellID(enchantID) or enchantID
     local enchantName
     if C_Spell and C_Spell.GetSpellName then
-        local ok, name = pcall(C_Spell.GetSpellName, enchantID)
+        local ok, name = pcall(C_Spell.GetSpellName, spellID)
         if ok and name then
             enchantName = name
         end
     elseif GetSpellInfo then
-        local name = GetSpellInfo(enchantID)
+        local name = GetSpellInfo(spellID)
         if name then
             enchantName = name
         end
@@ -1555,6 +1570,7 @@ function GB.GetProfessionToolEnchantInfoFromInfo(info)
     return {
         hasEnchant = true,
         enchantID = enchantID,
+        spellID = spellID,
         enchantName = enchantName,
         itemLink = itemLink,
     }

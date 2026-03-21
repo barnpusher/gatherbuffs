@@ -80,6 +80,7 @@ function GB:Init()
     end
     self.gatherLookup = GB.BuildGatherLookup()
     self:EnsureInventoryBaseline()
+    self:CaptureInventorySnapshot()
     self:RefreshShardTracker()
     self:BuildStaticUI()
     self:BuildMinimapButton()
@@ -120,6 +121,7 @@ function GB:Init()
             GB:HandleLoot(arg1)
             GB:UpdateProfit()
         elseif event == "BAG_UPDATE_DELAYED" then
+            GB:ProcessInventoryLootDelta()
             GB:ProcessPendingLoot()
             GB:UpdateBars()
         elseif event == "CURRENCY_DISPLAY_UPDATE" then
@@ -212,10 +214,21 @@ SlashCmdList.GATHERBUFFS = function(msg)
         for _, cat in ipairs(GATHERBUFFS_CATEGORIES) do
             local db = GB.db.categories[cat.id]
             if db and db.enabled then
-                local profID = cat.professions and cat.professions[1] or nil
-                local buff, aura = GB:GetRowBuff(cat.id, profID)
-                if buff then
-                    L(string.format("  [%s] spellID=%-8s  %s  %s", cat.id, tostring(buff.spellID), buff.name, aura and "FOUND" or "missing"))
+                if cat.id == "weaponstone" then
+                    for _, prof in ipairs(GB.GetProfessionDefs()) do
+                        if prof:UsesWeaponstone() and GB:IsProfessionAvailable(prof.id) then
+                            local buff, aura = GB:GetRowBuff(cat.id, prof.id)
+                            if buff then
+                                L(string.format("  [%s:%s] spellID=%-8s  %s  %s", cat.id, prof.id, tostring(buff.spellID), buff.name, aura and "FOUND" or "missing"))
+                            end
+                        end
+                    end
+                else
+                    local profID = cat.professions and cat.professions[1] or nil
+                    local buff, aura = GB:GetRowBuff(cat.id, profID)
+                    if buff then
+                        L(string.format("  [%s] spellID=%-8s  %s  %s", cat.id, tostring(buff.spellID), buff.name, aura and "FOUND" or "missing"))
+                    end
                 end
             end
         end
@@ -264,7 +277,13 @@ SlashCmdList.GATHERBUFFS = function(msg)
                         L(string.format("  %s Tool: id=%-8d  %s", info.label, toolID, name or "?"))
                         local enchantInfo = vitals.toolEnchant
                         if enchantInfo and enchantInfo.hasEnchant then
-                            L(string.format("  %s Tool Enchant: id=%-8d  %s", info.label, enchantInfo.enchantID, enchantInfo.enchantName or "?"))
+                            L(string.format(
+                                "  %s Tool Enchant: id=%-8d  spellID=%-8s  %s",
+                                info.label,
+                                enchantInfo.enchantID,
+                                tostring(enchantInfo.spellID),
+                                enchantInfo.enchantName or "?"
+                            ))
                         else
                             L(string.format("  %s Tool Enchant: none", info.label))
                         end

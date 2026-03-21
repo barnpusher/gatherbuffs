@@ -1,11 +1,5 @@
 local _, GB = ...
 
-local KNOWN_TOOL_ENCHANT_BUFFS = {
-    [7367] = 458929, -- Ironclaw Razorstone Q1
-    [7368] = 458930, -- Ironclaw Razorstone Q2
-    [7369] = 458931, -- Ironclaw Razorstone Q3
-}
-
 local function BuffStatsMatchTotals(buff, totals)
     if not (buff and buff.stats and totals) then
         return false
@@ -35,7 +29,7 @@ local function CheckEquipped(cat, buff, profID)
             local enchantInfo = GB.GetProfessionToolEnchantInfo(info)
             if enchantInfo and enchantInfo.hasEnchant then
                 local enchantName = enchantInfo.enchantName
-                local mappedSpellID = enchantInfo.enchantID and KNOWN_TOOL_ENCHANT_BUFFS[enchantInfo.enchantID]
+                local mappedSpellID = enchantInfo.spellID or (enchantInfo.enchantID and GB.GetToolEnchantSpellID and GB.GetToolEnchantSpellID(enchantInfo.enchantID))
                 if mappedSpellID and buff and buff.spellID and mappedSpellID == buff.spellID then
                     return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
                 end

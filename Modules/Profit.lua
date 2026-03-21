@@ -203,6 +203,7 @@ function GB:ResetSession()
     self.profitUiDirty = true
     if self.gatherLookup then
         self:CaptureInventoryBaseline()
+        self:CaptureInventorySnapshot()
     end
     self:SaveSessionState()
     if self.profitPanel then
@@ -275,6 +276,51 @@ function GB:CaptureInventoryBaseline()
     self.sessionBaseline = baseline
     self.sessionBaselineInitialized = true
     self.gphDirty = true
+end
+
+function GB:BuildInventorySnapshot()
+    local snapshot = {}
+    local bagStart = BACKPACK_CONTAINER or 0
+    local bagEnd = NUM_TOTAL_EQUIPPED_BAG_SLOTS or REAGENTBAG_CONTAINER or NUM_BAG_SLOTS or 4
+    if REAGENTBAG_CONTAINER and REAGENTBAG_CONTAINER > bagEnd then
+        bagEnd = REAGENTBAG_CONTAINER
+    end
+
+    if C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerItemInfo then
+        for bag = bagStart, bagEnd do
+            local numSlots = C_Container.GetContainerNumSlots(bag) or 0
+            for slot = 1, numSlots do
+                local info = C_Container.GetContainerItemInfo(bag, slot)
+                local itemID = info and info.itemID
+                local stackCount = info and info.stackCount
+                if itemID and stackCount and stackCount > 0 then
+                    snapshot[itemID] = (snapshot[itemID] or 0) + stackCount
+                end
+            end
+        end
+        return snapshot
+    end
+
+    if GetContainerNumSlots and GetContainerItemInfo and GetContainerItemID then
+        for bag = bagStart, bagEnd do
+            local numSlots = GetContainerNumSlots(bag) or 0
+            for slot = 1, numSlots do
+                local itemID = GetContainerItemID(bag, slot)
+                if itemID then
+                    local _, stackCount = GetContainerItemInfo(bag, slot)
+                    if stackCount and stackCount > 0 then
+                        snapshot[itemID] = (snapshot[itemID] or 0) + stackCount
+                    end
+                end
+            end
+        end
+    end
+
+    return snapshot
+end
+
+function GB:CaptureInventorySnapshot()
+    self.inventorySnapshot = self:BuildInventorySnapshot()
 end
 
 function GB:EnsureInventoryBaseline()
@@ -1261,63 +1307,117 @@ function GB.IsGatheringMat(itemID, profMap, gatherLookup)
     return false
 end
 
-function GB:HandleLoot(msg)
-    local trackedProfMap = self:GetTrackedProfitProfessionMap()
-    local matched = false
-    for itemLink, countText in msg:gmatch("(|Hitem:[^|]+|h.-|h|r)%s*x?(%d*)") do
-        matched = true
-        local itemID = tonumber(itemLink:match("item:(%d+)"))
-        local amount = tonumber(countText) or 1
-        if itemID then
-            self.lastLootAt = time()
-            local ignored = GATHERBUFFS_LOOT_IGNORE and GATHERBUFFS_LOOT_IGNORE[itemID]
-            local isGatherMat = not GB.merchantIsOpen and GB.IsGatheringMat(itemID, trackedProfMap, self.gatherLookup)
-            local isVendorItem = not ignored and not GB.merchantIsOpen and self:ShouldIncludeVendorLootItem(itemID)
-            local countsForProfit = not ignored and (isGatherMat or isVendorItem)
-            if countsForProfit then
-                self:MaybeAutoStartSession()
-            end
-            if countsForProfit and self.sessionPaused then
-                if self.lootDebug then
-                    print("|cffaaffaaGB paused:|r ignoring profit tracking while session is paused")
-                end
-                countsForProfit = false
-            end
-            if countsForProfit and isVendorItem then
-                self:TrackVendorLoot(itemID, amount, itemLink)
-            end
-            if isGatherMat then
-                self:TrackLoot(itemID, amount, itemLink, countsForProfit)
-            end
-            if isGatherMat and countsForProfit then
-                self:TrackVendorLoot(itemID, amount, itemLink)
-                local name = GetItemInfo(itemID) or "?"
-                self:AppendLootLog(string.format("%s  tracked  id=%-8d  x%-3d  %s", date("%H:%M:%S"), itemID, amount, name))
-                if self.lootDebug then
-                    print("|cffaaffaaGB tracked:|r id=" .. itemID .. " x" .. amount)
-                end
-            elseif isGatherMat then
-                local name = GetItemInfo(itemID) or "?"
-                self:AppendLootLog(string.format("%s  skipped  id=%-8d  x%-3d  %s  (session paused)", date("%H:%M:%S"), itemID, amount, name))
-                if self.lootDebug then
-                    print("|cffaaffaaGB skipped:|r id=" .. itemID .. " x" .. amount .. " (session paused)")
-                end
-            elseif not ignored and not GB.merchantIsOpen then
-                if not GetItemInfo(itemID) then
-                    self.pendingLoot = self.pendingLoot or {}
-                    table.insert(self.pendingLoot, { itemID = itemID, amount = amount, link = itemLink })
-                else
-                    local name = GetItemInfo(itemID) or "?"
-                    self:AppendLootLog(string.format("%s  unknown  id=%-8d  x%-3d  %s", date("%H:%M:%S"), itemID, amount, name))
-                    if self.lootDebug then
-                        self:ShowUnknownLoot(itemID, itemLink)
-                    end
-                end
+function GB:HandleLootItem(itemID, amount, itemLink, trackedProfMap)
+    if not itemID or not amount or amount <= 0 then
+        return
+    end
+
+    trackedProfMap = trackedProfMap or self:GetTrackedProfitProfessionMap()
+    self.lastLootAt = time()
+
+    local ignored = GATHERBUFFS_LOOT_IGNORE and GATHERBUFFS_LOOT_IGNORE[itemID]
+    local isGatherMat = not GB.merchantIsOpen and GB.IsGatheringMat(itemID, trackedProfMap, self.gatherLookup)
+    local isVendorItem = not ignored and not GB.merchantIsOpen and self:ShouldIncludeVendorLootItem(itemID)
+    local countsForProfit = not ignored and (isGatherMat or isVendorItem)
+
+    if countsForProfit then
+        self:MaybeAutoStartSession()
+    end
+    if countsForProfit and self.sessionPaused then
+        if self.lootDebug then
+            print("|cffaaffaaGB paused:|r ignoring profit tracking while session is paused")
+        end
+        countsForProfit = false
+    end
+    if countsForProfit and isVendorItem then
+        self:TrackVendorLoot(itemID, amount, itemLink)
+    end
+    if isGatherMat then
+        self:TrackLoot(itemID, amount, itemLink, countsForProfit)
+    end
+    if isGatherMat and countsForProfit then
+        self:TrackVendorLoot(itemID, amount, itemLink)
+        local name = GetItemInfo(itemID) or "?"
+        self:AppendLootLog(string.format("%s  tracked  id=%-8d  x%-3d  %s", date("%H:%M:%S"), itemID, amount, name))
+        if self.lootDebug then
+            print("|cffaaffaaGB tracked:|r id=" .. itemID .. " x" .. amount)
+        end
+    elseif isGatherMat then
+        local name = GetItemInfo(itemID) or "?"
+        self:AppendLootLog(string.format("%s  skipped  id=%-8d  x%-3d  %s  (session paused)", date("%H:%M:%S"), itemID, amount, name))
+        if self.lootDebug then
+            print("|cffaaffaaGB skipped:|r id=" .. itemID .. " x" .. amount .. " (session paused)")
+        end
+    elseif not ignored and not GB.merchantIsOpen then
+        if not GetItemInfo(itemID) then
+            self.pendingLoot = self.pendingLoot or {}
+            table.insert(self.pendingLoot, { itemID = itemID, amount = amount, link = itemLink })
+        else
+            local name = GetItemInfo(itemID) or "?"
+            self:AppendLootLog(string.format("%s  unknown  id=%-8d  x%-3d  %s", date("%H:%M:%S"), itemID, amount, name))
+            if self.lootDebug then
+                self:ShowUnknownLoot(itemID, itemLink)
             end
         end
     end
+end
+
+function GB:ProcessInventoryLootDelta()
+    local current = self:BuildInventorySnapshot()
+    local previous = self.inventorySnapshot
+    self.inventorySnapshot = current
+
+    if not previous or not self.pendingLootScan then
+        self.pendingLootScan = false
+        return
+    end
+
+    self.pendingLootScan = false
+    local trackedProfMap = self:GetTrackedProfitProfessionMap()
+    local matched = false
+
+    for itemID, currentCount in pairs(current) do
+        local delta = currentCount - (previous[itemID] or 0)
+        if delta > 0 then
+            matched = true
+            self:HandleLootItem(itemID, delta, nil, trackedProfMap)
+        end
+    end
+
     if self.lootDebug and not matched then
-        local clean = tostring(msg):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|H[^|]*|h", ""):gsub("|h", "")
+        print("|cffaaffaaGB loot:|r secret payload produced no bag delta")
+    end
+end
+
+function GB:HandleLoot(msg)
+    if type(msg) ~= "string" then
+        return
+    end
+
+    if issecretvalue and issecretvalue(msg) then
+        self.pendingLootScan = true
+        if self.lootDebug then
+            print("|cffaaffaaGB loot:|r secret payload, deferring to bag delta scan")
+        end
+        return
+    end
+
+    if msg == "" then
+        return
+    end
+
+    local trackedProfMap = self:GetTrackedProfitProfessionMap()
+    local matched = false
+    for itemLink, countText in string.gmatch(msg, "(|Hitem:[^|]+|h.-|h|r)%s*x?(%d*)") do
+        matched = true
+        local itemID = tonumber(string.match(itemLink, "item:(%d+)"))
+        local amount = tonumber(countText) or 1
+        if itemID then
+            self:HandleLootItem(itemID, amount, itemLink, trackedProfMap)
+        end
+    end
+    if self.lootDebug and not matched then
+        local clean = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|H[^|]*|h", ""):gsub("|h", "")
         print("|cffaaffaaGB loot (no links):|r " .. clean)
     end
 end

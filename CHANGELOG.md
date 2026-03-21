@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.99.15
+
+- Fixed profit tracking in instances and other secret-chat cases by falling back to bag delta scans instead of parsing protected CHAT_MSG_LOOT payloads
+- Improved profession tool enchant detection so known razorstone enchant IDs resolve to their matching spell IDs and names
+- Expanded debug output to show weaponstone state per profession and include both enchant IDs and mapped spell IDs for profession tools
+
 ## 0.99.14
 
 - Reduced CPU usage, optimized a bunch of stuff
