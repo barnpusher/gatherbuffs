@@ -8,6 +8,8 @@ _G.GatherBuffs = GB
 GB.ADDON_NAME = addonName or "GatherBuffs"
 GB.professionRegistry = GB.professionRegistry or {}
 GB.professionDefs = GB.professionDefs or {}
+GB.itemNameCache = GB.itemNameCache or {}
+GB.spellNameCache = GB.spellNameCache or {}
 
 function GB.RegisterProfession(def)
     if type(def) ~= "table" or type(def.id) ~= "string" or def.id == "" then
@@ -563,7 +565,21 @@ function GB.GetBuffKey(catID, buff)
     if buff.spellID then
         return catID .. ":" .. buff.spellID
     end
-    return catID .. ":" .. buff.name
+    for _, altSpellID in ipairs(buff.altSpellIDs or {}) do
+        local normalizedAltSpellID = GB.NormalizeSpellID(altSpellID)
+        if normalizedAltSpellID then
+            return catID .. ":" .. normalizedAltSpellID
+        end
+    end
+    local cat = GB.GetCatDef(catID)
+    if cat then
+        for index, candidate in ipairs(cat.buffs or {}) do
+            if candidate == buff then
+                return string.format("%s:index:%d", catID, index)
+            end
+        end
+    end
+    return catID
 end
 
 function GB.GetBuffDef(catID, selectedKey)
@@ -590,6 +606,97 @@ function GB.NormalizeSpellID(spellID)
         return normalized
     end
     return nil
+end
+
+function GB.GetItemNameByID(itemID)
+    itemID = tonumber(itemID)
+    if not itemID or itemID <= 0 then
+        return nil
+    end
+    if GB.itemNameCache[itemID] then
+        return GB.itemNameCache[itemID]
+    end
+
+    local name
+    if C_Item and C_Item.GetItemNameByID then
+        local ok, resolved = pcall(C_Item.GetItemNameByID, itemID)
+        if ok and type(resolved) == "string" and resolved ~= "" then
+            name = resolved
+        end
+    end
+    if not name and C_Item and C_Item.GetItemInfo then
+        local ok, resolved = pcall(C_Item.GetItemInfo, itemID)
+        if ok and type(resolved) == "string" and resolved ~= "" then
+            name = resolved
+        end
+    end
+    if not name and GetItemInfo then
+        local resolved = GetItemInfo(itemID)
+        if type(resolved) == "string" and resolved ~= "" then
+            name = resolved
+        end
+    end
+
+    if name then
+        GB.itemNameCache[itemID] = name
+    end
+    return name
+end
+
+function GB.GetSpellNameByID(spellID)
+    spellID = GB.NormalizeSpellID(spellID)
+    if not spellID then
+        return nil
+    end
+    if GB.spellNameCache[spellID] then
+        return GB.spellNameCache[spellID]
+    end
+
+    local name
+    if C_Spell and C_Spell.GetSpellName then
+        local ok, resolved = pcall(C_Spell.GetSpellName, spellID)
+        if ok and type(resolved) == "string" and resolved ~= "" then
+            name = resolved
+        end
+    end
+    if not name and GetSpellInfo then
+        local resolved = GetSpellInfo(spellID)
+        if type(resolved) == "string" and resolved ~= "" then
+            name = resolved
+        end
+    end
+
+    if name then
+        GB.spellNameCache[spellID] = name
+    end
+    return name
+end
+
+function GB.GetBuffDisplayName(buff)
+    if not buff then
+        return nil
+    end
+
+    for _, itemID in ipairs(buff.itemIDs or {}) do
+        local itemName = GB.GetItemNameByID(itemID)
+        if itemName then
+            return itemName
+        end
+    end
+
+    local spellName = GB.GetSpellNameByID(buff.spellID)
+    if spellName then
+        return spellName
+    end
+
+    for _, altSpellID in ipairs(buff.altSpellIDs or {}) do
+        local altSpellName = GB.GetSpellNameByID(altSpellID)
+        if altSpellName then
+            return altSpellName
+        end
+    end
+
+    return buff.name
 end
 
 function GB.GetBuffDefBySpellID(catID, spellID)
@@ -665,15 +772,6 @@ function GB.GetPlayerAura(spellID)
         local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, normalizedSpellID)
         if ok and aura then
             return aura
-        end
-    end
-    if C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName and C_Spell and C_Spell.GetSpellName then
-        local okName, spellName = pcall(C_Spell.GetSpellName, normalizedSpellID)
-        if okName and spellName then
-            local okAura, aura = pcall(C_UnitAuras.GetAuraDataBySpellName, "player", spellName, "HELPFUL")
-            if okAura and aura and GB.NormalizeSpellID(aura.spellId) == normalizedSpellID then
-                return aura
-            end
         end
     end
     return nil
@@ -1554,18 +1652,7 @@ function GB.GetProfessionToolEnchantInfoFromInfo(info)
     end
 
     local spellID = GB.GetToolEnchantSpellID(enchantID) or enchantID
-    local enchantName
-    if C_Spell and C_Spell.GetSpellName then
-        local ok, name = pcall(C_Spell.GetSpellName, spellID)
-        if ok and name then
-            enchantName = name
-        end
-    elseif GetSpellInfo then
-        local name = GetSpellInfo(spellID)
-        if name then
-            enchantName = name
-        end
-    end
+    local enchantName = GB.GetSpellNameByID(spellID)
 
     return {
         hasEnchant = true,

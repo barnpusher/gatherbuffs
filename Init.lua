@@ -219,7 +219,7 @@ SlashCmdList.GATHERBUFFS = function(msg)
                         if prof:UsesWeaponstone() and GB:IsProfessionAvailable(prof.id) then
                             local buff, aura = GB:GetRowBuff(cat.id, prof.id)
                             if buff then
-                                L(string.format("  [%s:%s] spellID=%-8s  %s  %s", cat.id, prof.id, tostring(buff.spellID), buff.name, aura and "FOUND" or "missing"))
+                                L(string.format("  [%s:%s] spellID=%-8s  %s  %s", cat.id, prof.id, tostring(buff.spellID), GB.GetBuffDisplayName(buff) or "?", aura and "FOUND" or "missing"))
                             end
                         end
                     end
@@ -227,7 +227,7 @@ SlashCmdList.GATHERBUFFS = function(msg)
                     local profID = cat.professions and cat.professions[1] or nil
                     local buff, aura = GB:GetRowBuff(cat.id, profID)
                     if buff then
-                        L(string.format("  [%s] spellID=%-8s  %s  %s", cat.id, tostring(buff.spellID), buff.name, aura and "FOUND" or "missing"))
+                        L(string.format("  [%s] spellID=%-8s  %s  %s", cat.id, tostring(buff.spellID), GB.GetBuffDisplayName(buff) or "?", aura and "FOUND" or "missing"))
                     end
                 end
             end
@@ -273,7 +273,7 @@ SlashCmdList.GATHERBUFFS = function(msg)
                 if vitals.tool then
                     local toolID = vitals.tool.itemID
                     if toolID then
-                        local name = GetItemInfo(toolID)
+                        local name = GB.GetItemNameByID(toolID)
                         L(string.format("  %s Tool: id=%-8d  %s", info.label, toolID, name or "?"))
                         local enchantInfo = vitals.toolEnchant
                         if enchantInfo and enchantInfo.hasEnchant then
@@ -294,7 +294,7 @@ SlashCmdList.GATHERBUFFS = function(msg)
                 for index, accessory in ipairs(vitals.accessories or {}) do
                     local itemID = accessory.itemID
                     if itemID then
-                        local name = GetItemInfo(itemID)
+                        local name = GB.GetItemNameByID(itemID)
                         L(string.format("  %s Accessory %d: id=%-8d  %s", info.label, index, itemID, name or "?"))
                     else
                         L(string.format("  %s Accessory %d: none", info.label, index))

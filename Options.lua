@@ -113,7 +113,7 @@ local function MakeOptRow(parent, cat, yTop, profID)
         if not buff then
             return "-"
         end
-        local label = buff.name or "-"
+        local label = GB.GetBuffDisplayName(buff) or "-"
         if buff.quality then
             label = label .. " " .. GB.FormatQualityText(buff.quality)
         end

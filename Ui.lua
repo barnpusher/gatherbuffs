@@ -702,6 +702,7 @@ end
 local function ApplyRow(row, buff, aura)
     local catDef = GB.GetCatDef(row.catID)
     local count = GB.GetBuffCount(buff)
+    local buffDisplayName = GB.GetBuffDisplayName(buff)
 
     local mods = GB.db and GB.db.modules
     GB.alertState = GB.alertState or {}
@@ -712,14 +713,14 @@ local function ApplyRow(row, buff, aura)
         local isBuffed = (aura ~= nil) and (buff ~= nil)
         if state.lastWasBuffed == true and not isBuffed and buff then
             PlaySound(SOUNDKIT.AUCTION_WINDOW_CLOSE)
-            print("|cffaaffaaGatherBuffs:|r " .. (buff.name or "Buff") .. " has expired.")
+            print("|cffaaffaaGatherBuffs:|r " .. (buffDisplayName or "Buff") .. " has expired.")
         end
         state.lastWasBuffed = isBuffed
     end
 
     if mods and mods.alertOnLowStock and count ~= nil then
         if state.lastCount ~= nil and state.lastCount > 0 and count == 0 and buff then
-            print("|cffff6644GatherBuffs:|r " .. (buff.name or "Consumable") .. " - out of stock!")
+            print("|cffff6644GatherBuffs:|r " .. (buffDisplayName or "Consumable") .. " - out of stock!")
         end
         state.lastCount = count
     end
@@ -774,7 +775,7 @@ local function ApplyRow(row, buff, aura)
         return
     end
 
-    local nameStr = GB.Trunc(buff.name, 16)
+    local nameStr = GB.Trunc(buffDisplayName or buff.name or "?", 16)
     if buff.quality then
         nameStr = nameStr .. " " .. GB.FormatQualityText(buff.quality)
     end
@@ -1116,7 +1117,7 @@ function GB:UpdateBars()
             if card.tool then
                 local toolID = vitals.tool and vitals.tool.itemID
                 if toolID then
-                    local itemName = GetItemInfo(toolID)
+                    local itemName = GB.GetItemNameByID(toolID)
                     local isMidnightTool = GATHERBUFFS_MINING_TOOLS and GATHERBUFFS_MINING_TOOLS[toolID]
                     if isMidnightTool then
                         card.tool.val:SetText("|cff00ee44" .. (itemName or "Unknown") .. "|r")
@@ -1130,7 +1131,7 @@ function GB:UpdateBars()
             if card.enchant then
                 local enchantInfo = vitals.toolEnchant
                 if enchantInfo and enchantInfo.hasEnchant then
-                    local label = enchantInfo.enchantName or ("Enchant ID " .. enchantInfo.enchantID)
+                    local label = GB.GetSpellNameByID(enchantInfo.spellID) or enchantInfo.enchantName or ("Enchant ID " .. enchantInfo.enchantID)
                     card.enchant.val:SetText("|cff00ee44" .. label .. "|r")
                 else
                     card.enchant.val:SetText("|cffff4444None|r")

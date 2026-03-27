@@ -4,9 +4,11 @@ GB.RegisterProfession({
     id = "skinning",
     label = "Skinning",
     find = "Skinning",
+    optionCategories = { "weaponstone" },
     mainCard = true,
-    showSettingsTab = false,
+    showSettingsTab = true,
     trackProfitWithoutAvailability = true,
+    weaponstone = true,
     midnightGear = {
         tools = {
             "Thalassian Skinning Knife",

@@ -1,24 +1,5 @@
 local _, GB = ...
 
-local function BuffStatsMatchTotals(buff, totals)
-    if not (buff and buff.stats and totals) then
-        return false
-    end
-    local matched = false
-    for _, stat in ipairs(GATHERBUFFS_STAT_ORDER or {}) do
-        local expected = buff.stats[stat.id] or 0
-        local actual = totals[stat.id] or 0
-        if expected ~= actual then
-            if expected ~= 0 or actual ~= 0 then
-                return false
-            end
-        elseif expected ~= 0 then
-            matched = true
-        end
-    end
-    return matched
-end
-
 local function CheckEquipped(cat, buff, profID)
     if not cat.equippedGear then
         return nil
@@ -30,18 +11,10 @@ local function CheckEquipped(cat, buff, profID)
             if enchantInfo and enchantInfo.hasEnchant then
                 local enchantName = enchantInfo.enchantName
                 local mappedSpellID = enchantInfo.spellID or (enchantInfo.enchantID and GB.GetToolEnchantSpellID and GB.GetToolEnchantSpellID(enchantInfo.enchantID))
-                if mappedSpellID and buff and buff.spellID and mappedSpellID == buff.spellID then
+                if mappedSpellID and buff and GB.BuffHasSpellID(buff, mappedSpellID) then
                     return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
                 end
-                if enchantInfo.enchantID and buff and buff.spellID and enchantInfo.enchantID == buff.spellID then
-                    return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
-                end
-                if enchantName and enchantName ~= "" and buff and buff.name and enchantName:find(buff.name, 1, true) then
-                    return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
-                end
-                local slots = GB.GetProfessionEquipmentSlotsFromInfo(info)
-                local enchantStats = slots and slots.tool and GB.GetInventorySlotEnchantStats(slots.tool) or nil
-                if BuffStatsMatchTotals(buff, enchantStats) then
+                if enchantInfo.enchantID and buff and GB.BuffHasSpellID(buff, enchantInfo.enchantID) then
                     return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
                 end
             end
