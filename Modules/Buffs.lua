@@ -7,7 +7,9 @@ local function CheckEquipped(cat, buff, profID)
     if cat.id == "weaponstone" then
         local info = GB.GetProfessionDisplayInfo and GB:GetProfessionDisplayInfo(profID)
         if info then
-            local enchantInfo = GB.GetProfessionToolEnchantInfo(info)
+            local profDef = GB.GetProfDef and GB.GetProfDef(profID) or nil
+            local static = profDef and profDef.GetStaticVitals and profDef:GetStaticVitals(GB, info) or nil
+            local enchantInfo = static and static.toolEnchant or GB.GetProfessionToolEnchantInfo(info)
             if enchantInfo and enchantInfo.hasEnchant then
                 local enchantName = enchantInfo.enchantName
                 local mappedSpellID = enchantInfo.spellID or (enchantInfo.enchantID and GB.GetToolEnchantSpellID and GB.GetToolEnchantSpellID(enchantInfo.enchantID))
@@ -15,6 +17,16 @@ local function CheckEquipped(cat, buff, profID)
                     return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
                 end
                 if enchantInfo.enchantID and buff and GB.BuffHasSpellID(buff, enchantInfo.enchantID) then
+                    return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
+                end
+                local slots = static and static.slots or GB.GetProfessionEquipmentSlots(info)
+                local enchantStats = static and static.enchantStats or (slots and slots.tool and GB.GetInventorySlotEnchantStats(slots.tool) or nil)
+                local selectedBuff = GB.GetSelectedBuff and GB:GetSelectedBuff(cat.id, profID) or nil
+                if selectedBuff
+                    and buff
+                    and GB.GetBuffKey(cat.id, selectedBuff) == GB.GetBuffKey(cat.id, buff)
+                    and GB.BuffStatsContainedInTotals
+                    and GB.BuffStatsContainedInTotals(buff, enchantStats) then
                     return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
                 end
             end

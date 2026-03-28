@@ -23,6 +23,19 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Build CurseForge changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_arg=()
+          if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
+            version_arg=(--version "${GITHUB_REF_NAME}")
+          fi
+          python3 .github/scripts/extract_cf_changelog.py \
+            --source CHANGELOG.md \
+            --output .cf-release-changelog.md \
+            "${version_arg[@]}"
+
       - name: Package addon
         uses: BigWigsMods/packager@v2
         env:

@@ -209,6 +209,17 @@ SlashCmdList.GATHERBUFFS = function(msg)
         local function L(s)
             table.insert(lines, s or "")
         end
+        local function FormatTotals(totals)
+            if not totals then
+                return "nil"
+            end
+            local parts = {}
+            for _, stat in ipairs(GATHERBUFFS_STAT_ORDER or {}) do
+                local statID = stat.id
+                parts[#parts + 1] = string.format("%s=%s", statID, GB.FormatStat(statID, totals[statID] or 0))
+            end
+            return table.concat(parts, "  ")
+        end
 
         L("=== Tracked categories ===")
         for _, cat in ipairs(GATHERBUFFS_CATEGORIES) do
@@ -284,6 +295,25 @@ SlashCmdList.GATHERBUFFS = function(msg)
                                 tostring(enchantInfo.spellID),
                                 enchantInfo.enchantName or "?"
                             ))
+                            if slots and slots.tool then
+                                local enchantTotals = GB.GetInventorySlotEnchantStats(slots.tool)
+                                local equipmentTotals = GB.GetProfessionEquipmentTotalsFromInfo(info)
+                                local apiTotals = GB.GetProfessionApiTotalsFromInfo(info, GB.profMap)
+                                local activeBuffTotals = GB.GetProfessionBuffTotalsByID(GB, info.id, true)
+                                local inferredTotals = nil
+                                if apiTotals then
+                                    inferredTotals = GB.MakeTotals()
+                                    for _, stat in ipairs(GATHERBUFFS_STAT_ORDER or {}) do
+                                        local statID = stat.id
+                                        inferredTotals[statID] = (apiTotals[statID] or 0) - (equipmentTotals[statID] or 0) - (activeBuffTotals[statID] or 0)
+                                    end
+                                end
+                                L(string.format("  %s Tool Enchant Stats: %s", info.label, FormatTotals(enchantTotals)))
+                                L(string.format("  %s Equip Totals: %s", info.label, FormatTotals(equipmentTotals)))
+                                L(string.format("  %s API Totals: %s", info.label, FormatTotals(apiTotals)))
+                                L(string.format("  %s Active Buff Totals: %s", info.label, FormatTotals(activeBuffTotals)))
+                                L(string.format("  %s Inferred Enchant Totals: %s", info.label, FormatTotals(inferredTotals)))
+                            end
                         else
                             L(string.format("  %s Tool Enchant: none", info.label))
                         end

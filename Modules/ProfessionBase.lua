@@ -215,8 +215,8 @@ function Base:GetEquipmentSlots(addon, info)
 end
 
 -- Returns the active enchant metadata for the profession tool.
-function Base:GetToolEnchantInfo(addon, info)
-    return GB.GetProfessionToolEnchantInfoFromInfo(info)
+function Base:GetToolEnchantInfo(addon, info, slots, enchantStats)
+    return GB.GetProfessionToolEnchantInfoFromInfo(info, slots, enchantStats)
 end
 
 -- Returns stat totals parsed from equipped profession items.
@@ -269,6 +269,7 @@ function Base:GetStaticVitals(addon, info)
     end
 
     local slots = self:GetEquipmentSlots(addon, info) or { accessories = {} }
+    local enchantStats = slots.tool and GB.GetInventorySlotEnchantStats(slots.tool) or GB.MakeTotals()
     local tool = slots.tool and {
         slotID = slots.tool,
         itemID = GetInventoryItemID("player", slots.tool),
@@ -291,7 +292,8 @@ function Base:GetStaticVitals(addon, info)
         slots = slots,
         tool = tool,
         accessories = accessories,
-        toolEnchant = self:GetToolEnchantInfo(addon, info),
+        enchantStats = enchantStats,
+        toolEnchant = self:GetToolEnchantInfo(addon, info, slots, enchantStats),
         equipmentTotals = self:GetEquipmentTotals(addon, info),
     }
     addon:SetProfessionStaticCache(self.id, cache)

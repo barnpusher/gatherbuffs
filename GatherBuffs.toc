@@ -2,7 +2,7 @@
 ## Title: GatherBuffs
 ## Notes: Tracks gathering and consumable buff timers for Midnight
 ## Author: Barnpusher
-## Version: 0.99.15
+## Version: 0.99.16
 ## X-Curse-Project-ID: 1486906
 ## SavedVariables: GatherBuffsDB
 ## SavedVariablesPerCharacter: GatherBuffsCharDB

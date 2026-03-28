@@ -2,9 +2,13 @@
 
 ## Unreleased
 
+## 0.99.16
+
+- Automated CurseForge release changelog generation from the matching `CHANGELOG.md` version section
 - Added a Skinning settings tab and Razorstone support for Skinning
 - Switched buff and enchant matching to strict ID-based resolution instead of spell-name fallbacks
 - Added cached item/spell name lookups from the WoW client for UI, settings, and debug display text
+- Improved profession tool Razorstone detection and moved the expensive resolution work into the profession static cache to avoid hot-path CPU spikes
 
 ## 0.99.15
 

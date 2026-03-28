@@ -1225,6 +1225,65 @@ local function ReadTooltipProfessionLine(line, tags)
     end
 end
 
+local function CollectTooltipTextLine(text, lines)
+    if type(text) == "string" and text ~= "" then
+        lines[#lines + 1] = text
+    end
+end
+
+local function ReadTooltipTextDataLine(line, lines)
+    if not line then
+        return
+    end
+
+    if (not line.leftText and not line.rightText) and TooltipUtil and TooltipUtil.SurfaceArgs then
+        pcall(TooltipUtil.SurfaceArgs, line)
+    end
+
+    CollectTooltipTextLine(line.leftText, lines)
+    CollectTooltipTextLine(line.rightText, lines)
+
+    for _, child in ipairs(line.lines or {}) do
+        ReadTooltipTextDataLine(child, lines)
+    end
+end
+
+function GB.GetInventorySlotTooltipText(slotID)
+    local lines = {}
+    if not slotID or not GetInventoryItemLink("player", slotID) then
+        return lines
+    end
+
+    if C_TooltipInfo and C_TooltipInfo.GetInventoryItem then
+        local ok, data = pcall(C_TooltipInfo.GetInventoryItem, "player", slotID)
+        if ok and data and data.lines then
+            for _, line in ipairs(data.lines) do
+                ReadTooltipTextDataLine(line, lines)
+            end
+        end
+        if #lines > 0 then
+            return lines
+        end
+    end
+
+    local tip = EnsureScanTooltip()
+    tip:ClearLines()
+    tip:SetInventoryItem("player", slotID)
+
+    for i = 1, 40 do
+        local leftFS = _G[TOOLTIP_SCAN_NAME .. "TextLeft" .. i]
+        local rightFS = _G[TOOLTIP_SCAN_NAME .. "TextRight" .. i]
+        if not leftFS and not rightFS then
+            break
+        end
+        CollectTooltipTextLine(leftFS and leftFS.GetText and leftFS:GetText(), lines)
+        CollectTooltipTextLine(rightFS and rightFS.GetText and rightFS:GetText(), lines)
+    end
+
+    tip:Hide()
+    return lines
+end
+
 local function ScanEquippedItemStats(slotID)
     local totals = GB.MakeTotals()
     if not slotID or not GetInventoryItemLink("player", slotID) then
@@ -1295,7 +1354,7 @@ local function ScanItemStatsFromLink(itemLink)
     return totals
 end
 
-local function StripItemLinkEnchant(itemLink)
+local function ExtractItemStringParts(itemLink)
     if type(itemLink) ~= "string" then
         return nil
     end
@@ -1310,6 +1369,14 @@ local function StripItemLinkEnchant(itemLink)
         parts[#parts + 1] = part
     end
     if parts[1] ~= "item" or not parts[2] then
+        return nil
+    end
+    return parts
+end
+
+local function StripItemLinkEnchant(itemLink)
+    local parts = ExtractItemStringParts(itemLink)
+    if not parts then
         return nil
     end
     parts[3] = "0"
@@ -1467,7 +1534,7 @@ function GB.GetInventorySlotEnchantStats(slotID)
         return GB.MakeTotals()
     end
 
-    local fullStats = ScanItemStatsFromLink(link)
+    local fullStats = ScanEquippedItemStats(slotID)
     local baseStats = ScanItemStatsFromLink(strippedLink)
     local totals = GB.MakeTotals()
     for _, stat in ipairs(GATHERBUFFS_STAT_ORDER) do
@@ -1477,9 +1544,132 @@ function GB.GetInventorySlotEnchantStats(slotID)
     return totals
 end
 
+function GB.BuffStatsContainedInTotals(buff, totals)
+    if not (buff and buff.stats and totals) then
+        return false
+    end
+    local matched = false
+    for _, stat in ipairs(GATHERBUFFS_STAT_ORDER or {}) do
+        local expected = buff.stats[stat.id] or 0
+        local actual = totals[stat.id] or 0
+        if expected ~= 0 then
+            if actual ~= expected then
+                return false
+            end
+            matched = true
+        end
+    end
+    return matched
+end
+
+function GB.ResolveWeaponstoneSpellIDFromStats(profID, totals, preferredBuff)
+    local cat = GB.GetCatDef("weaponstone")
+    if not (cat and totals) then
+        return nil
+    end
+
+    local candidates = {}
+    for _, buff in ipairs(cat.buffs or {}) do
+        if GB.BuffMatchesProfession(buff, profID) and GB.BuffStatsContainedInTotals(buff, totals) then
+            candidates[#candidates + 1] = buff
+        end
+    end
+
+    if #candidates == 0 then
+        return nil
+    end
+    if #candidates == 1 then
+        return candidates[1].spellID
+    end
+    return nil
+end
+
+function GB.ResolveWeaponstoneSpellIDFromTooltip(slotID, profID, totals, preferredBuff)
+    local cat = GB.GetCatDef("weaponstone")
+    if not (cat and slotID) then
+        return nil
+    end
+
+    local tooltipLines = GB.GetInventorySlotTooltipText(slotID)
+    if #tooltipLines == 0 then
+        return nil
+    end
+
+    local candidates = {}
+    for _, buff in ipairs(cat.buffs or {}) do
+        if GB.BuffMatchesProfession(buff, profID) then
+            local names = {}
+            names[#names + 1] = (buff.name or ""):lower()
+            local displayName = GB.GetBuffDisplayName(buff)
+            if displayName then
+                names[#names + 1] = displayName:lower()
+            end
+
+            local found = false
+            for _, line in ipairs(tooltipLines) do
+                local lowerLine = line:lower()
+                for _, name in ipairs(names) do
+                    if name ~= "" and lowerLine:find(name, 1, true) then
+                        found = true
+                        break
+                    end
+                end
+                if found then
+                    break
+                end
+            end
+
+            if found and (not totals or GB.BuffStatsContainedInTotals(buff, totals)) then
+                candidates[#candidates + 1] = buff
+            end
+        end
+    end
+
+    if #candidates == 0 then
+        return nil
+    end
+    if #candidates == 1 then
+        return candidates[1].spellID
+    end
+    if preferredBuff and preferredBuff.name then
+        for _, buff in ipairs(candidates) do
+            if buff.name == preferredBuff.name then
+                return buff.spellID
+            end
+        end
+    end
+    return nil
+end
+
+function GB.ResolveWeaponstoneSpellIDFromProfessionTotals(info)
+    if not info or not info.id then
+        return nil
+    end
+
+    local apiTotals = GB.GetProfessionApiTotalsFromInfo(info, GB.profMap)
+    if not apiTotals then
+        return nil
+    end
+
+    local equipmentTotals = GB.GetProfessionEquipmentTotalsFromInfo(info)
+    local activeBuffTotals = GB.GetProfessionBuffTotalsByID(GB, info.id, true)
+    local inferredTotals = GB.MakeTotals()
+
+    for _, stat in ipairs(GATHERBUFFS_STAT_ORDER or {}) do
+        local statID = stat.id
+        inferredTotals[statID] = (apiTotals[statID] or 0) - (equipmentTotals[statID] or 0) - (activeBuffTotals[statID] or 0)
+    end
+
+    if not HasAnyStatValue(inferredTotals, true) then
+        return nil
+    end
+
+    return GB.ResolveWeaponstoneSpellIDFromStats(info.id, inferredTotals)
+end
+
 function GB.GetProfessionEquipmentTotalsFromInfo(info)
     local totals = GB.MakeTotals()
-    local slots = GB.GetProfessionEquipmentSlotsFromInfo(info)
+    local slots = GB.GetProfessionEquipmentSlots(info)
     if not slots then
         return totals
     end
@@ -1615,11 +1805,8 @@ function GB.GetProfessionEquipmentSlots(infoOrProfID, profMap)
 end
 
 function GB.GetItemLinkEnchantID(itemLink)
-    if not itemLink then
-        return nil
-    end
-    local enchantID = itemLink:match("|Hitem:%d+:(%-?%d+):")
-    enchantID = tonumber(enchantID)
+    local parts = ExtractItemStringParts(itemLink)
+    local enchantID = parts and tonumber(parts[3]) or nil
     if enchantID and enchantID > 0 then
         return enchantID
     end
@@ -1640,8 +1827,8 @@ function GB.GetToolEnchantSpellID(enchantID)
     return KNOWN_TOOL_ENCHANT_SPELLS[enchantID]
 end
 
-function GB.GetProfessionToolEnchantInfoFromInfo(info)
-    local slots = GB.GetProfessionEquipmentSlotsFromInfo(info)
+function GB.GetProfessionToolEnchantInfoFromInfo(info, slots, enchantStats)
+    slots = slots or GB.GetProfessionEquipmentSlots(info)
     if not slots or not slots.tool then
         return nil
     end
@@ -1651,7 +1838,19 @@ function GB.GetProfessionToolEnchantInfoFromInfo(info)
         return { hasEnchant = false, itemLink = itemLink }
     end
 
-    local spellID = GB.GetToolEnchantSpellID(enchantID) or enchantID
+    local spellID = GB.GetToolEnchantSpellID(enchantID)
+    local preferredWeaponstoneBuff = GB.GetSelectedBuff and GB.GetSelectedBuff(GB, "weaponstone", info.id) or nil
+    if not spellID then
+        enchantStats = enchantStats or GB.GetInventorySlotEnchantStats(slots.tool)
+        spellID = GB.ResolveWeaponstoneSpellIDFromTooltip(slots.tool, info.id, enchantStats, preferredWeaponstoneBuff)
+        if HasAnyStatValue(enchantStats, true) then
+            spellID = spellID or GB.ResolveWeaponstoneSpellIDFromStats(info.id, enchantStats)
+        end
+    end
+    if not spellID then
+        spellID = GB.ResolveWeaponstoneSpellIDFromProfessionTotals(info)
+    end
+    spellID = spellID or enchantID
     local enchantName = GB.GetSpellNameByID(spellID)
 
     return {

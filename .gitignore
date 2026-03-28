@@ -3,3 +3,4 @@ package/
 release_stage_*/
 release_dist_*/
 *.zip
+.cf-release-changelog.md
