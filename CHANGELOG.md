@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.99.18
+
+- Modularize professions
+- Fixed category defaults so module-owned buff categories inherit their intended enabled state
+- Fixed profession tool verification in the main UI to use each profession's own gear catalog
+- Fixed Fishing `Bonus` to stay disabled by default alongside Fishing `Lure`
+- Reduced hot-path overhead by removing the unnecessary protected `tonumber` call in spell ID normalization and caching tracked item counts between bag updates
+- Stopped rebuilding the options window frame whenever not needed
+- Removed the redundant extra `UpdateBars` pass on `CURRENCY_DISPLAY_UPDATE`
+- Documented the distinction between profession-owned `categories` and UI-exposed `optionCategories`
+
 ## 0.99.17
 
 - Fixed Profit panel visibility so disabling the Fishing module no longer hides Profit (thanks `thatn00b` for the report)

@@ -5,6 +5,26 @@ GB.RegisterProfession({
     label = "Mining",
     find = "Mining",
     optionCategories = { "weaponstone", "overload_mining" },
+    categories = {
+        {
+            id = "overload_mining",
+            label = "Overload",
+            scope = "common",
+            profIcon = "mining",
+            showAvailable = true,
+            professions = { "mining" },
+            buffs = {
+                {
+                    name = "Wild Perception (Mine)",
+                    spellID = 1225704,
+                    maxDuration = 300,
+                    itemIDs = {},
+                    professions = { "mining" },
+                    stats = { perception = 150 },
+                },
+            },
+        },
+    },
     mainCard = true,
     showSettingsTab = true,
     toolDetails = true,

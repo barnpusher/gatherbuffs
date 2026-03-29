@@ -1112,7 +1112,7 @@ function GB:UpdateBars()
                 local toolID = vitals.tool and vitals.tool.itemID
                 if toolID then
                     local itemName = GB.GetItemNameByID(toolID)
-                    local isMidnightTool = GATHERBUFFS_MINING_TOOLS and GATHERBUFFS_MINING_TOOLS[toolID]
+                    local isMidnightTool = prof:IsKnownMidnightGearItem(toolID, "tool")
                     if isMidnightTool then
                         card.tool.val:SetText("|cff00ee44" .. (itemName or "Unknown") .. "|r")
                     else

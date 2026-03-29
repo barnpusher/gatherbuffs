@@ -1,12 +1,6 @@
--- Data_updated.lua
--- Buff definitions, researched stat values, and profession metadata.
+local _, GB = ...
 
--- Known Midnight mining tools (item IDs).  Mark as true to show a green
--- "verified" indicator.  Only confirmed mining tools should be placed here.
-GATHERBUFFS_MINING_TOOLS = {
-    [238010] = true, -- Thalassian Pickaxe (Midnight mining tool)
-    -- Additional Midnight mining tools can be added here once verified.
-}
+-- Buff definitions, researched stat values, and profession metadata.
 
 -- Items to silently ignore in loot debug popup (non‑gathering drops from herb/ore nodes).
 GATHERBUFFS_LOOT_IGNORE = {
@@ -27,11 +21,11 @@ GATHERBUFFS_STAT_ORDER = {
     { id = "speedPct",   label = "Speed%"    },
 }
 
--- Category definitions.  Each category contains one or more buffs.  The
+-- Shared category definitions. Each category contains one or more buffs. The
 -- "scope" field controls whether a buff is shown for all professions (common)
 -- or restricted to specific professions.  The "notes" field gives
 -- additional context or restrictions.
-GATHERBUFFS_CATEGORIES = {
+GB.RegisterCategories({
     {
         id = "food",
         label = "Food",
@@ -219,110 +213,11 @@ GATHERBUFFS_CATEGORIES = {
         },
     },
     {
-        id = "fishing",
-        label = "Lure",
-        scope = "common",
-        profIcon = "fishing",
-        professions = { "fishing" },
-        buffs = {
-            { name = "Blood Hunter Lure",    spellID = 1237974, maxDuration = 1800, itemIDs = { 238377 }, statsUnknown = true },
-            { name = "Lucky Loa Lure",       spellID = 1237964, maxDuration = 1800, itemIDs = { 241145, 238376 }, statsUnknown = true },
-            { name = "Ominous Octopus Lure", spellID = 1237965, maxDuration = 1800, itemIDs = { 238373 }, statsUnknown = true },
-            { name = "Goldengill Blessing",  spellID = 456596,  maxDuration = 900,  itemIDs = { 222533 }, statsUnknown = true },
-        },
-    },
-    {
-        id = "fishing_chum",
-        label = "Bonus",
-        scope = "common",
-        profIcon = "fishing",
-        professions = { "fishing" },
-        buffs = {
-            {
-                name = "Chum",
-                spellID = 1237942,
-                maxDuration = 30,
-                itemIDs = { 238365 },
-                statsUnknown = true,
-                notes = "Fishing chum buff from throwing specific fish back into the water.",
-            },
-            {
-                name = "Midnight Perception",
-                spellID = 1235216,
-                maxDuration = 15,
-                itemIDs = { 238366 },
-                stats = { perception = 150 },
-                notes = "Short fishing perception buff triggered by throwing specific fish back into the water.",
-            },
-        },
-    },
-    {
-        id = "enchanting",
-        label = "Buff",
-        scope = "common",
-        profIcon = "enchanting",
-        professions = { "enchanting" },
-        buffs = {
-            {
-                name = "Shattered Essence",
-                spellID = 1235733,
-                itemIDs = {},
-                statsUnknown = true,
-                notes = "Enchanting-only buff tracked by player aura.",
-            },
-        },
-    },
-    {
-        id = "overload_mining",
-        label = "Overload",
-        scope = "common",
-        profIcon = "mining",
-        showAvailable = true,
-        professions = { "mining" },
-        buffs = {
-            {
-                name = "Wild Perception (Mine)",
-                spellID = 1225704,
-                maxDuration = 300,
-                itemIDs = {},
-                professions = { "mining" },
-                stats = { perception = 150 },
-            },
-        },
-    },
-    {
-        id = "overload_herbalism",
-        label = "Overload",
-        scope = "common",
-        profIcon = "herbalism",
-        showAvailable = true,
-        professions = { "herbalism" },
-        buffs = {
-            {
-                name = "Wild Perception (Herb)",
-                spellID = 1223879,
-                maxDuration = 300,
-                itemIDs = {},
-                professions = { "herbalism" },
-                stats = { perception = 150 },
-            },
-            {
-                name = "Green Thumb",
-                spellID = 1221172,
-                maxDuration = 300,
-                itemIDs = {},
-                professions = { "herbalism" },
-                statsUnknown = true,
-                notes = "Doubles the herbs you receive on your next gather.",
-            },
-        },
-    },
-    {
         id = "weaponstone",
         label = "W.Stone",
         scope = "common",
         profIcon = "mining",
-        professions = { "mining" },
+        professions = { "mining", "herbalism", "skinning" },
         equippedGear = true,  -- detected via C_Item.IsEquippedItem, not player aura
         buffs = {
             -- Refulgent Razorstone (Midnight) - quality tiers with separate spells
@@ -394,4 +289,4 @@ GATHERBUFFS_CATEGORIES = {
             },
         },
     },
-}
+})

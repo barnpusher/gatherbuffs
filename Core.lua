@@ -8,8 +8,108 @@ _G.GatherBuffs = GB
 GB.ADDON_NAME = addonName or "GatherBuffs"
 GB.professionRegistry = GB.professionRegistry or {}
 GB.professionDefs = GB.professionDefs or {}
+GB.categoryRegistry = GB.categoryRegistry or {}
+GB.categoryRegistryByID = GB.categoryRegistryByID or {}
+GB.categoryOwnerIndex = GB.categoryOwnerIndex or {}
 GB.itemNameCache = GB.itemNameCache or {}
 GB.spellNameCache = GB.spellNameCache or {}
+GB.itemCountCache = GB.itemCountCache or {}
+GATHERBUFFS_CATEGORIES = GB.categoryRegistry
+
+local function GetDefaultCategorySelectedKey(cat)
+    local buff = cat and cat.buffs and cat.buffs[1] or nil
+    if not buff then
+        return nil
+    end
+    if buff.itemIDs and buff.itemIDs[1] then
+        return cat.id .. ":" .. buff.itemIDs[1]
+    end
+    if buff.spellID then
+        return cat.id .. ":" .. buff.spellID
+    end
+    for _, altSpellID in ipairs(buff.altSpellIDs or {}) do
+        local normalizedAltSpellID = GB.NormalizeSpellID and GB.NormalizeSpellID(altSpellID) or tonumber(altSpellID)
+        if normalizedAltSpellID then
+            return cat.id .. ":" .. normalizedAltSpellID
+        end
+    end
+    return cat.id
+end
+
+local function EnsureDefaultCategoryState(cat)
+    if type(cat) ~= "table" or type(cat.id) ~= "string" or cat.id == "" or type(GB.DEFAULTS) ~= "table" then
+        return
+    end
+
+    GB.DEFAULTS.categories = GB.DEFAULTS.categories or {}
+    local defaults = GB.DEFAULTS.categories[cat.id]
+    if type(defaults) ~= "table" then
+        defaults = {}
+        GB.DEFAULTS.categories[cat.id] = defaults
+    end
+    if defaults.enabled == nil then
+        defaults.enabled = cat.defaultEnabled ~= false
+    end
+    if defaults.selectedKey == nil then
+        defaults.selectedKey = GetDefaultCategorySelectedKey(cat)
+    end
+end
+
+local function RemoveCategoryByID(catID)
+    local existing = GB.categoryRegistryByID[catID]
+    if not existing then
+        return
+    end
+
+    for index, candidate in ipairs(GB.categoryRegistry) do
+        if candidate.id == catID then
+            table.remove(GB.categoryRegistry, index)
+            break
+        end
+    end
+    GB.categoryRegistryByID[catID] = nil
+end
+
+function GB.UnregisterOwnedCategories(ownerID)
+    if type(ownerID) ~= "string" or ownerID == "" then
+        return
+    end
+
+    local owned = GB.categoryOwnerIndex[ownerID]
+    if not owned then
+        return
+    end
+
+    for _, catID in ipairs(owned) do
+        RemoveCategoryByID(catID)
+    end
+    GB.categoryOwnerIndex[ownerID] = nil
+end
+
+function GB.RegisterCategory(cat, ownerID)
+    if type(cat) ~= "table" or type(cat.id) ~= "string" or cat.id == "" then
+        error("GB.RegisterCategory requires a category definition with a non-empty id")
+    end
+
+    RemoveCategoryByID(cat.id)
+    cat.ownerID = ownerID
+    GB.categoryRegistry[#GB.categoryRegistry + 1] = cat
+    GB.categoryRegistryByID[cat.id] = cat
+
+    if type(ownerID) == "string" and ownerID ~= "" then
+        GB.categoryOwnerIndex[ownerID] = GB.categoryOwnerIndex[ownerID] or {}
+        table.insert(GB.categoryOwnerIndex[ownerID], cat.id)
+    end
+
+    EnsureDefaultCategoryState(cat)
+    return cat
+end
+
+function GB.RegisterCategories(categories, ownerID)
+    for _, cat in ipairs(categories or {}) do
+        GB.RegisterCategory(cat, ownerID)
+    end
+end
 
 function GB.RegisterProfession(def)
     if type(def) ~= "table" or type(def.id) ~= "string" or def.id == "" then
@@ -34,6 +134,8 @@ function GB.RegisterProfession(def)
         GB.professionDefs[#GB.professionDefs + 1] = def
     end
     GB.professionRegistry[def.id] = def
+    GB.UnregisterOwnedCategories(def.id)
+    GB.RegisterCategories(def.categories, def.id)
     return def
 end
 
@@ -127,14 +229,13 @@ GB.DEFAULTS = {
         phial = { enabled = true, selectedKey = "phial:241316" },
         steamphial = { enabled = true, selectedKey = "steamphial:191347" },
         potion = { enabled = true, selectedKey = "potion:124671" },
-        fishing = { enabled = false, selectedKey = "fishing:1237974" },
-        enchanting = { enabled = true, selectedKey = "enchanting:1235733" },
-        overload_mining = { enabled = true, selectedKey = "overload_mining:1225704" },
-        overload_herbalism = { enabled = true, selectedKey = "overload_herbalism:1223879" },
         weaponstone = { enabled = true, selectedKey = "weaponstone:237373" },
-        fishing_chum = { enabled = true, selectedKey = "fishing_chum:1237942" },
     },
 }
+
+for _, cat in ipairs(GB.categoryRegistry) do
+    EnsureDefaultCategoryState(cat)
+end
 
 GB.W = 408
 GB.ROW_H = 20
@@ -470,11 +571,7 @@ function GB:GetPrice(itemID)
 end
 
 function GB.GetCatDef(catID)
-    for _, cat in ipairs(GATHERBUFFS_CATEGORIES) do
-        if cat.id == catID then
-            return cat
-        end
-    end
+    return GB.categoryRegistryByID[catID]
 end
 
 function GB.GetProfDef(profID)
@@ -609,11 +706,24 @@ function GB.NormalizeSpellID(spellID)
     if type(spellID) == "number" then
         return spellID
     end
-    local ok, normalized = pcall(tonumber, spellID)
-    if ok then
-        return normalized
+    return tonumber(spellID)
+end
+
+function GB:InvalidateItemCountCache()
+    self.itemCountCache = {}
+end
+
+function GB:GetCachedItemCount(itemID)
+    itemID = tonumber(itemID)
+    if not itemID or itemID <= 0 then
+        return 0
     end
-    return nil
+    local cached = self.itemCountCache[itemID]
+    if cached == nil then
+        cached = GetItemCount(itemID, false)
+        self.itemCountCache[itemID] = cached
+    end
+    return cached
 end
 
 function GB.GetItemNameByID(itemID)
@@ -923,7 +1033,7 @@ function GB.GetBuffCount(buff)
     end
     local total = 0
     for _, itemID in ipairs(buff.itemIDs) do
-        total = total + GetItemCount(itemID, false)
+        total = total + GB:GetCachedItemCount(itemID)
     end
     return total
 end
@@ -931,7 +1041,7 @@ end
 function GB.GetTrackedItemCount(itemIDs)
     local total = 0
     for _, itemID in ipairs(itemIDs or {}) do
-        total = total + GetItemCount(itemID, false)
+        total = total + GB:GetCachedItemCount(itemID)
     end
     return total
 end
@@ -961,7 +1071,7 @@ function GB.GetUseItemID(buff)
         return nil
     end
     for _, itemID in ipairs(buff.itemIDs) do
-        if GetItemCount(itemID, false) > 0 then
+        if GB:GetCachedItemCount(itemID) > 0 then
             return itemID
         end
     end

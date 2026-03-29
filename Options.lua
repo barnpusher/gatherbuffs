@@ -756,11 +756,9 @@ function GB:ToggleOptions()
         self.optFrame:Hide()
         CloseDropdown()
     else
-        if self.optFrame then
-            self.optFrame:Hide()
-            self.optFrame = nil
+        if not self.optFrame then
+            self.optFrame = self:BuildOptions()
         end
-        self.optFrame = self:BuildOptions()
         self.optFrame:Show()
     end
 end

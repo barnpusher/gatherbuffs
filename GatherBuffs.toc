@@ -2,13 +2,13 @@
 ## Title: GatherBuffs
 ## Notes: Tracks gathering and consumable buff timers for Midnight
 ## Author: Barnpusher
-## Version: 0.99.16
+## Version: 0.99.18
 ## X-Curse-Project-ID: 1486906
 ## SavedVariables: GatherBuffsDB
 ## SavedVariablesPerCharacter: GatherBuffsCharDB
 
-Data.lua
 Core.lua
+Data.lua
 Modules\AH\Base.lua
 Modules\AH\ZygorBase.lua
 Modules\AH\TSM.lua

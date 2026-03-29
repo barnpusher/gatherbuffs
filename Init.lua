@@ -41,12 +41,14 @@ function GB:CheckProfession()
     if #self.profOrder > 0 or self.hasFishing or self.hasProfitProfession then
         self:Rebuild()
         self:RefreshMainFrameVisibility()
+        return true
     else
         self:RefreshMainFrameVisibility()
         if self.optFrame then
             self.optFrame:Hide()
         end
     end
+    return false
 end
 
 function GB:Init()
@@ -73,6 +75,7 @@ function GB:Init()
         self:SaveSessionState()
     end
     self.gatherLookup = GB.BuildGatherLookup()
+    self:InvalidateItemCountCache()
     self:EnsureInventoryBaseline()
     self:CaptureInventorySnapshot()
     self:RefreshShardTracker()
@@ -115,13 +118,15 @@ function GB:Init()
             GB:HandleLoot(arg1)
             GB:UpdateProfit()
         elseif event == "BAG_UPDATE_DELAYED" then
+            GB:InvalidateItemCountCache()
             GB:ProcessInventoryLootDelta()
             GB:ProcessPendingLoot()
             GB:UpdateBars()
         elseif event == "CURRENCY_DISPLAY_UPDATE" then
             GB:HandleShardCurrencyUpdate(arg1, arg2, arg3)
-            GB:CheckProfession()
-            GB:UpdateBars()
+            if not GB:CheckProfession() then
+                GB:UpdateBars()
+            end
         elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
             if event == "PLAYER_REGEN_ENABLED" then
                 GB.vitalsNeedsRefresh = true

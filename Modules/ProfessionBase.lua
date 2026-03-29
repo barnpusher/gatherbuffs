@@ -62,7 +62,10 @@ function Base:GetDisplayInfo(addon)
     return addon.profMap and addon.profMap[self.id] or nil
 end
 
--- Returns the buff categories owned by this profession for settings and buff state checks.
+-- optionCategories are categories this profession exposes in its settings UI.
+-- categories are categories this profession owns and registers into the shared registry.
+-- Shared categories like weaponstone appear in optionCategories without being owned here.
+-- Returns the category IDs this profession should surface in settings and buff state checks.
 function Base:GetBuffCategoryIDs()
     return self.buffCategories or self.optionCategories or {}
 end

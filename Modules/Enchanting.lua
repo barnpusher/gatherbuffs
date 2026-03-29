@@ -5,6 +5,24 @@ GB.RegisterProfession({
     label = "Enchanting",
     find = "Enchanting",
     optionCategories = { "enchanting" },
+    categories = {
+        {
+            id = "enchanting",
+            label = "Buff",
+            scope = "common",
+            profIcon = "enchanting",
+            professions = { "enchanting" },
+            buffs = {
+                {
+                    name = "Shattered Essence",
+                    spellID = 1235733,
+                    itemIDs = {},
+                    statsUnknown = true,
+                    notes = "Enchanting-only buff tracked by player aura.",
+                },
+            },
+        },
+    },
     profitOnly = true,
     showSettingsTab = true,
     profitToggleLabel = "Include Midnight enchanting mats",

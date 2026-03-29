@@ -7,6 +7,48 @@ local Fishing = GB.RegisterProfession({
     simpleSkillSummary = true,
     supportsDesiredStatSelection = false,
     optionCategories = { "fishing", "fishing_chum" },
+    categories = {
+        {
+            id = "fishing",
+            label = "Lure",
+            scope = "common",
+            profIcon = "fishing",
+            professions = { "fishing" },
+            defaultEnabled = false,
+            buffs = {
+                { name = "Blood Hunter Lure",    spellID = 1237974, maxDuration = 1800, itemIDs = { 238377 }, statsUnknown = true },
+                { name = "Lucky Loa Lure",       spellID = 1237964, maxDuration = 1800, itemIDs = { 241145, 238376 }, statsUnknown = true },
+                { name = "Ominous Octopus Lure", spellID = 1237965, maxDuration = 1800, itemIDs = { 238373 }, statsUnknown = true },
+                { name = "Goldengill Blessing",  spellID = 456596,  maxDuration = 900,  itemIDs = { 222533 }, statsUnknown = true },
+            },
+        },
+        {
+            id = "fishing_chum",
+            label = "Bonus",
+            scope = "common",
+            profIcon = "fishing",
+            professions = { "fishing" },
+            defaultEnabled = false,
+            buffs = {
+                {
+                    name = "Chum",
+                    spellID = 1237942,
+                    maxDuration = 30,
+                    itemIDs = { 238365 },
+                    statsUnknown = true,
+                    notes = "Fishing chum buff from throwing specific fish back into the water.",
+                },
+                {
+                    name = "Midnight Perception",
+                    spellID = 1235216,
+                    maxDuration = 15,
+                    itemIDs = { 238366 },
+                    stats = { perception = 150 },
+                    notes = "Short fishing perception buff triggered by throwing specific fish back into the water.",
+                },
+            },
+        },
+    },
     mainCard = true,
     showSettingsTab = true,
     midnightGear = {
