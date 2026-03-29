@@ -1,7 +1,7 @@
 local _, GB = ...
 
 function GB:ShouldShowMainFrame()
-    local hasTrackedContent = (#(self.profOrder or {}) > 0) or self.hasFishing
+    local hasTrackedContent = (#(self.profOrder or {}) > 0) or self.hasFishing or self.hasProfitProfession
     if not hasTrackedContent then
         return false
     end
@@ -28,7 +28,7 @@ function GB:SetManualHidden(hidden)
     local wasHidden = self.db.manuallyHidden == true
     self.db.manuallyHidden = hidden and true or false
     self:RefreshMainFrameVisibility()
-    if wasHidden and not self.db.manuallyHidden and (#(self.profOrder or {}) > 0 or self.hasFishing) then
+    if wasHidden and not self.db.manuallyHidden and (#(self.profOrder or {}) > 0 or self.hasFishing or self.hasProfitProfession) then
         self:Rebuild()
         self:UpdateBars()
     end
@@ -37,14 +37,8 @@ end
 function GB:CheckProfession()
     self.profMap, self.profOrder = GB.SnapshotProfessions()
     self.hasFishing = self:HasFishingProfession()
-    self.hasProfitProfession = false
-    for _, prof in ipairs(GB.GetProfessionDefs()) do
-        if self:IsProfessionAvailable(prof.id) and self:IsProfitProfessionTracked(prof.id) then
-            self.hasProfitProfession = true
-            break
-        end
-    end
-    if #self.profOrder > 0 or self.hasFishing then
+    self.hasProfitProfession = self:HasTrackedProfitProfession()
+    if #self.profOrder > 0 or self.hasFishing or self.hasProfitProfession then
         self:Rebuild()
         self:RefreshMainFrameVisibility()
     else

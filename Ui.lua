@@ -862,13 +862,7 @@ end
 
 function GB:Rebuild()
     self.profMap, self.profOrder = GB.SnapshotProfessions()
-    self.hasProfitProfession = false
-    for _, prof in ipairs(GB.GetProfessionDefs()) do
-        if self:IsProfessionAvailable(prof.id) and self:IsProfessionModuleEnabled(prof.id) and self:IsProfitProfessionTracked(prof.id) then
-            self.hasProfitProfession = true
-            break
-        end
-    end
+    self.hasProfitProfession = self:HasTrackedProfitProfession()
     self.commonPanel:Show()
     local activeCommon, y = {}, PAD
     self.commonPanel:SetPoint("TOPLEFT", self.mainTree, "TOPLEFT", PAD, -y)
@@ -881,7 +875,7 @@ function GB:Rebuild()
             if cat.professions then
                 profOK = false
                 for _, pid in ipairs(cat.professions) do
-                    if self.profMap[pid] then
+                    if self:IsProfessionAvailable(pid) and self:IsProfessionModuleEnabled(pid) then
                         profOK = true
                         break
                     end

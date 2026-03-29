@@ -257,6 +257,22 @@ GATHERBUFFS_CATEGORIES = {
         },
     },
     {
+        id = "enchanting",
+        label = "Buff",
+        scope = "common",
+        profIcon = "enchanting",
+        professions = { "enchanting" },
+        buffs = {
+            {
+                name = "Shattered Essence",
+                spellID = 1235733,
+                itemIDs = {},
+                statsUnknown = true,
+                notes = "Enchanting-only buff tracked by player aura.",
+            },
+        },
+    },
+    {
         id = "overload_mining",
         label = "Overload",
         scope = "common",

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Fixed Profit panel visibility so disabling the Fishing module no longer hides Profit (thanks `thatn00b` for the report)
+- Fixed Profit AH value lookups so TSM and Auctionator prices resolve more reliably again (thanks `thatn00b` for the report)
+- Reworked Midnight profession gear catalogs to use readable keyed entries with strict item ID matching for tools and accessories.
+- Added more verified Midnight profession gear entries for Fishing, Herbalism, and Skinning
+- Fixed profession-scoped common buff rows so module toggles and per-profession settings are respected consistently, including Fishing lure/bonus rows
+- Added Enchanting shared buff tracking for `Shattered Essence`
+- Expanded Midnight enchanting profit tracking to include `Dawn Crystal`
+
 ## 0.99.16
 
 - Automated CurseForge release changelog generation from the matching `CHANGELOG.md` version section

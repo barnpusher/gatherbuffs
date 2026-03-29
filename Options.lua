@@ -552,7 +552,7 @@ function GB:BuildOptions()
         local pc = contentFrames.profit
         local y = 0
         for _, prof in ipairs(GB.GetProfessionDefs()) do
-            if not prof:IsProfitOnly() and self:IsProfessionAvailable(prof.id) then
+            if prof.id ~= "fishing" and not prof:IsProfitOnly() and self:IsProfessionAvailable(prof.id) then
                 MakeBoolOptRow(pc, "Track " .. prof:GetLabel(), y,
                     function()
                         return GB:IsProfitProfessionTracked(prof.id)

@@ -72,30 +72,40 @@ function Base:GetGatherItems()
     return self.gatherItems or {}
 end
 
-local function NormalizeGearName(name)
-    if type(name) ~= "string" then
+local function GetGearEntryItemIDs(entryValue)
+    if type(entryValue) ~= "table" then
         return nil
     end
-    return name:lower()
+
+    if type(entryValue.ids) == "table" then
+        return entryValue.ids
+    end
+
+    return entryValue
 end
 
--- Returns the catalog of known Midnight gear names for this profession.
+-- Returns the catalog of known Midnight gear item ID lists for this profession.
 function Base:GetMidnightGearCatalog()
     return self.midnightGear or {}
 end
 
--- Returns true if the given item name is recognized as Midnight gear for this profession.
-function Base:IsKnownMidnightGearName(itemName, slotKind)
-    local normalized = NormalizeGearName(itemName)
-    if not normalized then
+-- Returns true if the given item ID is recognized as Midnight gear for this profession.
+function Base:IsKnownMidnightGearItem(itemID, slotKind)
+    itemID = tonumber(itemID)
+    if not itemID or itemID <= 0 then
         return false
     end
 
     local catalog = self:GetMidnightGearCatalog()
     local entries = catalog[slotKind == "tool" and "tools" or "accessories"] or {}
-    for _, entryName in ipairs(entries) do
-        if NormalizeGearName(entryName) == normalized then
-            return true
+    for _, entryValue in pairs(entries) do
+        local itemIDs = GetGearEntryItemIDs(entryValue)
+        if itemIDs then
+            for _, knownItemID in ipairs(itemIDs) do
+                if tonumber(knownItemID) == itemID then
+                    return true
+                end
+            end
         end
     end
     return false

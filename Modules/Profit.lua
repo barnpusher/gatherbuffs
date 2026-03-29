@@ -5,6 +5,50 @@ local PAD = GB.PAD
 local QUAL_ICON = GB.QUAL_ICON
 local MIN_GPH_ELAPSED = 60
 
+local function GetGatherGroupKey(lookupInfo, itemID)
+    local entry = lookupInfo and lookupInfo.entry
+    if entry and entry.ids and #entry.ids > 0 then
+        return "__entry_" .. table.concat(entry.ids, "_")
+    end
+    if lookupInfo and lookupInfo.key then
+        return "__key_" .. lookupInfo.key
+    end
+    return "__id_" .. itemID
+end
+
+local function GetGatherKeyLabel(key)
+    if type(key) ~= "string" or key == "" then
+        return nil
+    end
+    local words = {}
+    for word in key:gmatch("[^_]+") do
+        words[#words + 1] = word:sub(1, 1):upper() .. word:sub(2)
+    end
+    if #words > 0 then
+        return table.concat(words, " ")
+    end
+    return nil
+end
+
+local function GetGatherGroupDisplayName(lookupInfo, itemID)
+    local entry = lookupInfo and lookupInfo.entry
+    if entry and entry.ids then
+        for _, candidateItemID in ipairs(entry.ids) do
+            local itemName = GB.GetItemNameByID(candidateItemID)
+            if itemName and itemName ~= "" then
+                return itemName
+            end
+        end
+    end
+
+    local keyLabel = lookupInfo and GetGatherKeyLabel(lookupInfo.key)
+    if keyLabel then
+        return keyLabel
+    end
+
+    return GB.GetItemNameByID(itemID) or ("item:" .. itemID)
+end
+
 function GB:GetActiveElapsed()
     local paused = self.sessionPaused
     local total = self.sessionPausedTotal or 0
@@ -422,13 +466,11 @@ function GB:BuildCurrentProfitGroups(includeBagFallback)
                     sessionCount = sessionCount,
                     price = self:GetPrice(itemID),
                 }
-                local groupKey = lookupInfo and lookupInfo.name or ("__id_" .. itemID)
+                local groupKey = GetGatherGroupKey(lookupInfo, itemID)
                 if not grouped[groupKey] then
                     grouped[groupKey] = {}
                     groupOrder[#groupOrder + 1] = groupKey
-                    groupDisplay[groupKey] = lookupInfo and lookupInfo.name
-                        or GetItemInfo(itemID)
-                        or ("item:" .. itemID)
+                    groupDisplay[groupKey] = GetGatherGroupDisplayName(lookupInfo, itemID)
                 end
                 grouped[groupKey][#grouped[groupKey] + 1] = item
                 totalValue = totalValue + ((item.price or 0) * sessionCount)
@@ -687,9 +729,11 @@ end
 function GB:UpdateProfit()
     local totalValue = self.profitTotalValue or 0
     local rows = self.profitRowCache or {}
+    local layoutChanged = false
 
     if self.profitUiDirty or not self.profitRowCache then
         totalValue, rows = 0, {}
+        local previousRowCount = self.profitVisibleRowCount or 0
         local byGroup, groupOrder, groupDisplay, groupedTotalValue = self:BuildCurrentProfitGroups(true)
         local vendorValue, vendorCount = self:BuildVendorLootSummary()
         totalValue = (groupedTotalValue or 0) + vendorValue
@@ -740,8 +784,19 @@ function GB:UpdateProfit()
         self.profitRowCache = rows
         self.profitTotalValue = totalValue
         self.profitVisibleRowCount = #rows
+        layoutChanged = previousRowCount ~= #rows
         self:EnsureProfitRows(#rows)
         self.profitUiDirty = false
+
+        if layoutChanged
+            and self.db
+            and self.db.modules
+            and self.db.modules.profitExpanded
+            and self.profitPanel
+            and self.profitPanel:IsShown() then
+            self:Rebuild()
+            return
+        end
     end
 
     self.profitMeta:SetText(string.format("Started: %s", date("%Y-%m-%d %H:%M", self.sessionStart)))
@@ -1176,7 +1231,7 @@ end
 local function FormatKnownGearLabel(prof, slotKind, itemID)
     local name, itemQuality = GetItemInfo(itemID)
     name = name or ("item:" .. tostring(itemID))
-    if prof:IsKnownMidnightGearName(name, slotKind) then
+    if prof:IsKnownMidnightGearItem(itemID, slotKind) then
         local color = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[itemQuality or 0]
         local coloredName = color and (color.hex .. name .. "|r") or name
         local craftedTier = itemQuality and (itemQuality - 1) or nil
@@ -1282,11 +1337,11 @@ end
 function GB.BuildGatherLookup()
     local lookup = {}
     for _, prof in ipairs(GB.GetProfessionDefs()) do
-        for _, entry in ipairs(prof:GetGatherItems()) do
+        for entryKey, entry in pairs(prof:GetGatherItems()) do
             local totalTiers = #entry.ids
             for tier, itemID in ipairs(entry.ids) do
                 if not lookup[itemID] then
-                    lookup[itemID] = { name = entry.name, profs = {}, entry = entry, tier = tier, totalTiers = totalTiers }
+                    lookup[itemID] = { key = entryKey, profs = {}, entry = entry, tier = tier, totalTiers = totalTiers }
                 end
                 lookup[itemID].profs[prof.id] = true
             end

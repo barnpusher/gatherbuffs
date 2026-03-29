@@ -10,16 +10,33 @@ local source = GB.AHSourceBase:New({
 })
 
 function source:IsAvailable()
-    return Auctionator and Auctionator.API and Auctionator.API.v1 and Auctionator.API.v1.GetAuctionPriceByItemID
+    return Auctionator and Auctionator.API and Auctionator.API.v1
+        and (Auctionator.API.v1.GetAuctionPriceByItemID or Auctionator.API.v1.GetAuctionPriceByItemLink)
 end
 
 function source:GetPrice(itemID)
-    if Auctionator and Auctionator.API and Auctionator.API.v1 and Auctionator.API.v1.GetAuctionPriceByItemID then
-        local ok, value = pcall(Auctionator.API.v1.GetAuctionPriceByItemID, AUCTIONATOR_CALLER, itemID)
-        if ok and value and value > 0 then
+    local api = Auctionator and Auctionator.API and Auctionator.API.v1
+    if not api then
+        return nil
+    end
+
+    if api.GetAuctionPriceByItemID then
+        local ok, value = pcall(api.GetAuctionPriceByItemID, AUCTIONATOR_CALLER, itemID)
+        if ok and type(value) == "number" and value > 0 then
             return value
         end
     end
+
+    if api.GetAuctionPriceByItemLink then
+        local itemLink = select(2, GetItemInfo(itemID))
+        if itemLink then
+            local ok, value = pcall(api.GetAuctionPriceByItemLink, AUCTIONATOR_CALLER, itemLink)
+            if ok and type(value) == "number" and value > 0 then
+                return value
+            end
+        end
+    end
+
     return nil
 end
 

@@ -44,6 +44,17 @@ local function CheckEquipped(cat, buff, profID)
     return nil
 end
 
+local function ResolveCategoryProfID(catID, profID)
+    if profID then
+        return profID
+    end
+    local cat = GB.GetCatDef(catID)
+    if not cat or type(cat.professions) ~= "table" or #cat.professions ~= 1 then
+        return nil
+    end
+    return type(cat.professions[1]) == "string" and cat.professions[1] or nil
+end
+
 function GB:ToggleMainCollapsed()
     self.db.modules.mainCollapsed = not self.db.modules.mainCollapsed
 end
@@ -153,6 +164,7 @@ function GB:HandleShardCurrencyUpdate(currencyType, quantity, quantityChange)
 end
 
 function GB:GetCategorySelectionKey(catID, profID)
+    profID = ResolveCategoryProfID(catID, profID)
     local db = self.db.categories[catID]
     if not db then
         return nil
@@ -164,6 +176,7 @@ function GB:GetCategorySelectionKey(catID, profID)
 end
 
 function GB:GetCategoryEnabled(catID, profID)
+    profID = ResolveCategoryProfID(catID, profID)
     local db = self.db.categories[catID]
     if not db then
         return false
@@ -175,6 +188,7 @@ function GB:GetCategoryEnabled(catID, profID)
 end
 
 function GB:SetCategoryEnabled(catID, enabled, profID)
+    profID = ResolveCategoryProfID(catID, profID)
     local db = self.db.categories[catID]
     if not db then
         return
@@ -189,6 +203,7 @@ function GB:SetCategoryEnabled(catID, enabled, profID)
 end
 
 function GB:SetCategorySelectionKey(catID, selectedKey, profID)
+    profID = ResolveCategoryProfID(catID, profID)
     local db = self.db.categories[catID]
     if not db then
         return
@@ -203,6 +218,7 @@ function GB:SetCategorySelectionKey(catID, selectedKey, profID)
 end
 
 function GB:GetSelectedBuff(catID, profID)
+    profID = ResolveCategoryProfID(catID, profID)
     local db = self.db.categories[catID]
     if not db then
         return nil
@@ -246,6 +262,7 @@ function GB:GetSelectedBuff(catID, profID)
 end
 
 function GB:GetRowBuff(catID, profID)
+    profID = ResolveCategoryProfID(catID, profID)
     local cat = GB.GetCatDef(catID)
     if not cat then
         return nil, nil
@@ -282,8 +299,17 @@ end
 function GB:GetCommonTotals(activeOnly)
     local totals = GB.MakeTotals()
     for _, cat in ipairs(GATHERBUFFS_CATEGORIES) do
-        local db = self.db.categories[cat.id]
-        if cat.scope == "common" and db and db.enabled then
+        local profOK = true
+        if cat.professions then
+            profOK = false
+            for _, pid in ipairs(cat.professions) do
+                if self:IsProfessionAvailable(pid) and self:IsProfessionModuleEnabled(pid) then
+                    profOK = true
+                    break
+                end
+            end
+        end
+        if cat.scope == "common" and self:GetCategoryEnabled(cat.id) and profOK then
             local buff, aura = self:GetRowBuff(cat.id)
             if buff and (not activeOnly or aura) then
                 GB.AddStats(totals, buff)

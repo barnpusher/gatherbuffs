@@ -12,16 +12,23 @@ function source:IsAvailable()
 end
 
 function source:GetPrice(itemID)
+    local itemString = "i:" .. itemID
+    local customPriceKeys = { "DBMarket", "dbmarket" }
+
     if TSM_API and TSM_API.GetCustomPriceValue then
-        local ok, value = pcall(TSM_API.GetCustomPriceValue, "DBMarket", "i:" .. itemID)
-        if ok and value and value > 0 then
-            return value
+        for _, customPriceKey in ipairs(customPriceKeys) do
+            local ok, value = pcall(TSM_API.GetCustomPriceValue, customPriceKey, itemString)
+            if ok and type(value) == "number" and value > 0 then
+                return value
+            end
         end
     end
     if TSM_API and TSM_API.FOUR and TSM_API.FOUR.CustomPrice and TSM_API.FOUR.CustomPrice.GetValue then
-        local ok, value = pcall(TSM_API.FOUR.CustomPrice.GetValue, "DBMarket", "i:" .. itemID)
-        if ok and value and value > 0 then
-            return value
+        for _, customPriceKey in ipairs(customPriceKeys) do
+            local ok, value = pcall(TSM_API.FOUR.CustomPrice.GetValue, customPriceKey, itemString)
+            if ok and type(value) == "number" and value > 0 then
+                return value
+            end
         end
     end
     return nil

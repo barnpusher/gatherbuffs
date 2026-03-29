@@ -98,7 +98,6 @@ GB.DEFAULTS = {
             mining = true,
             herbalism = true,
             skinning = true,
-            fishing = true,
             tailoring = true,
             enchanting = false,
         },
@@ -129,6 +128,7 @@ GB.DEFAULTS = {
         steamphial = { enabled = true, selectedKey = "steamphial:191347" },
         potion = { enabled = true, selectedKey = "potion:124671" },
         fishing = { enabled = false, selectedKey = "fishing:1237974" },
+        enchanting = { enabled = true, selectedKey = "enchanting:1235733" },
         overload_mining = { enabled = true, selectedKey = "overload_mining:1225704" },
         overload_herbalism = { enabled = true, selectedKey = "overload_herbalism:1223879" },
         weaponstone = { enabled = true, selectedKey = "weaponstone:237373" },
@@ -174,6 +174,7 @@ GB.PROF_ICONS = {
     herbalism = "Interface/Icons/Trade_Herbalism",
     fishing = "Interface/Icons/Trade_Fishing",
     skinning = "Interface/Icons/INV_Misc_Pelt_Wolf_01",
+    enchanting = "Interface/Icons/Trade_Engraving",
 }
 
 GB.PROFIT_PRICE_SOURCE_MODES = {
@@ -538,6 +539,9 @@ function GB:GetDesiredStat(profID)
 end
 
 function GB:IsProfitProfessionTracked(profID)
+    if profID == "fishing" then
+        return self:IsProfessionModuleEnabled(profID)
+    end
     local tracking = self.db.modules and self.db.modules.profitTracking
     if not tracking then
         return false
@@ -556,6 +560,10 @@ function GB:GetTrackedProfitProfessionMap()
         end
     end
     return tracked
+end
+
+function GB:HasTrackedProfitProfession()
+    return next(self:GetTrackedProfitProfessionMap()) ~= nil
 end
 
 function GB.GetBuffKey(catID, buff)
