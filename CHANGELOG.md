@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.99.17
+
 - Fixed Profit panel visibility so disabling the Fishing module no longer hides Profit (thanks `thatn00b` for the report)
 - Fixed Profit AH value lookups so TSM and Auctionator prices resolve more reliably again (thanks `thatn00b` for the report)
 - Reworked Midnight profession gear catalogs to use readable keyed entries with strict item ID matching for tools and accessories.
