@@ -701,8 +701,8 @@ end
 
 local function ApplyRow(row, buff, aura)
     local catDef = GB.GetCatDef(row.catID)
-    local count = GB.GetBuffCount(buff)
-    local buffDisplayName = GB.GetBuffDisplayName(buff)
+    local count = GB.GetBuffCount(buff, row.catID)
+    local buffDisplayName = GB.GetBuffDisplayLabel(row.catID, buff, false)
 
     local mods = GB.db and GB.db.modules
     GB.alertState = GB.alertState or {}
@@ -733,7 +733,7 @@ local function ApplyRow(row, buff, aura)
             if realAura and realAura.expirationTime and realAura.expirationTime > 0 then
                 aura = realAura
                 buff = catBuff
-                count = GB.GetBuffCount(catBuff)
+                count = GB.GetBuffCount(catBuff, row.catID)
                 break
             end
         end
@@ -776,9 +776,6 @@ local function ApplyRow(row, buff, aura)
     end
 
     local nameStr = GB.Trunc(buffDisplayName or buff.name or "?", 16)
-    if buff.quality then
-        nameStr = nameStr .. " " .. GB.FormatQualityText(buff.quality)
-    end
     row.nm:SetText(nameStr)
     if not buff.spellID then
         row.nm:SetTextColor(0.75, 0.68, 0.35)

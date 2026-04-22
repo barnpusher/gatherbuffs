@@ -67,6 +67,7 @@ GB.RegisterCategories({
         buffs = {
             {
                 name = "Haranir Phial of Perception (Q2)",
+                selectionKey = "phial:haranir_perception",
                 spellID = 1236763,
                 maxDuration = 1800,
                 itemIDs = { 241316 },
@@ -74,6 +75,7 @@ GB.RegisterCategories({
             },
             {
                 name = "Haranir Phial of Perception (Q1)",
+                selectionKey = "phial:haranir_perception",
                 spellID = 1236763,
                 maxDuration = 1800,
                 itemIDs = { 241317 },
@@ -81,6 +83,7 @@ GB.RegisterCategories({
             },
             {
                 name = "Haranir Phial of Finesse (Q2)",
+                selectionKey = "phial:haranir_finesse",
                 spellID = 1236767,
                 maxDuration = 1800,
                 itemIDs = { 241310 },
@@ -88,6 +91,7 @@ GB.RegisterCategories({
             },
             {
                 name = "Haranir Phial of Finesse (Q1)",
+                selectionKey = "phial:haranir_finesse",
                 spellID = 1236767,
                 maxDuration = 1800,
                 itemIDs = { 241311 },
@@ -95,6 +99,7 @@ GB.RegisterCategories({
             },
             {
                 name = "Haranir Phial of Ingenuity (Q2)",
+                selectionKey = "phial:haranir_ingenuity",
                 spellID = 1239755,
                 maxDuration = 1800,
                 itemIDs = { 241312 },
@@ -102,6 +107,7 @@ GB.RegisterCategories({
             },
             {
                 name = "Haranir Phial of Ingenuity (Q1)",
+                selectionKey = "phial:haranir_ingenuity",
                 spellID = 1239755,
                 maxDuration = 1800,
                 itemIDs = { 241313 },
@@ -125,6 +131,7 @@ GB.RegisterCategories({
             {
                 name = "Crystalline Phial of Perception",
                 quality = 3,
+                selectionKey = "steamphial:crystalline_perception",
                 spellID = 393714,
                 maxDuration = 1800,
                 itemIDs = { 191356 },
@@ -134,6 +141,7 @@ GB.RegisterCategories({
             {
                 name = "Crystalline Phial of Perception",
                 quality = 2,
+                selectionKey = "steamphial:crystalline_perception",
                 spellID = 393714,
                 maxDuration = 1800,
                 itemIDs = { 191355 },
@@ -142,6 +150,7 @@ GB.RegisterCategories({
             {
                 name = "Crystalline Phial of Perception",
                 quality = 1,
+                selectionKey = "steamphial:crystalline_perception",
                 spellID = 393714,
                 maxDuration = 1800,
                 itemIDs = { 191354 },
@@ -150,6 +159,7 @@ GB.RegisterCategories({
             {
                 name = "Aerated Phial of Deftness",
                 quality = 3,
+                selectionKey = "steamphial:aerated_deftness",
                 spellID = 393700,
                 maxDuration = 1800,
                 itemIDs = { 191344 },
@@ -158,6 +168,7 @@ GB.RegisterCategories({
             {
                 name = "Aerated Phial of Deftness",
                 quality = 2,
+                selectionKey = "steamphial:aerated_deftness",
                 spellID = 393700,
                 maxDuration = 1800,
                 itemIDs = { 191343 },
@@ -166,6 +177,7 @@ GB.RegisterCategories({
             {
                 name = "Aerated Phial of Deftness",
                 quality = 1,
+                selectionKey = "steamphial:aerated_deftness",
                 spellID = 393700,
                 maxDuration = 1800,
                 itemIDs = { 191342 },
@@ -174,6 +186,7 @@ GB.RegisterCategories({
             {
                 name = "Steaming Phial of Finesse",
                 quality = 3,
+                selectionKey = "steamphial:steaming_finesse",
                 spellID = 393717,  -- shared buff aura for all quality tiers
                 maxDuration = 1800,
                 itemIDs = { 191347 },
@@ -183,6 +196,7 @@ GB.RegisterCategories({
             {
                 name = "Steaming Phial of Finesse",
                 quality = 2,
+                selectionKey = "steamphial:steaming_finesse",
                 spellID = 393717,  -- shared buff aura for all quality tiers
                 maxDuration = 1800,
                 itemIDs = { 191346 },
@@ -191,6 +205,7 @@ GB.RegisterCategories({
             {
                 name = "Steaming Phial of Finesse",
                 quality = 1,
+                selectionKey = "steamphial:steaming_finesse",
                 spellID = 393717,  -- shared buff aura for all quality tiers
                 maxDuration = 1800,
                 itemIDs = { 191345 },
@@ -236,56 +251,6 @@ GB.RegisterCategories({
                 maxDuration = 7200,
                 itemIDs = { 237372 },
                 stats = { finesse = 43 },
-            },
-            -- Ironclaw Razorstone (TWW) - 3 quality tiers
-            {
-                name = "Ironclaw Razorstone",
-                quality = 3,
-                spellID = 458931,
-                maxDuration = 7200,
-                itemIDs = { 222507 },
-                stats = { finesse = 72 },
-            },
-            {
-                name = "Ironclaw Razorstone",
-                quality = 2,
-                spellID = 458930,
-                maxDuration = 7200,
-                itemIDs = { 222506 },
-                stats = { finesse = 57 },
-            },
-            {
-                name = "Ironclaw Razorstone",
-                quality = 1,
-                spellID = 458929,
-                maxDuration = 7200,
-                itemIDs = { 222505 },
-                stats = { finesse = 43 },
-            },
-            -- Primal Razorstone (DF) - 3 quality tiers
-            {
-                name = "Primal Razorstone",
-                quality = 3,
-                spellID = 371681,
-                maxDuration = 7200,
-                itemIDs = { 191950 },
-                stats = { finesse = 24 },
-            },
-            {
-                name = "Primal Razorstone",
-                quality = 2,
-                spellID = 371680,
-                maxDuration = 7200,
-                itemIDs = { 191949 },
-                stats = { finesse = 19 },
-            },
-            {
-                name = "Primal Razorstone",
-                quality = 1,
-                spellID = 371641,
-                maxDuration = 7200,
-                itemIDs = { 191948 },
-                stats = { finesse = 14 },
             },
         },
     },

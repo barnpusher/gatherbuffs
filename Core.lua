@@ -21,19 +21,7 @@ local function GetDefaultCategorySelectedKey(cat)
     if not buff then
         return nil
     end
-    if buff.itemIDs and buff.itemIDs[1] then
-        return cat.id .. ":" .. buff.itemIDs[1]
-    end
-    if buff.spellID then
-        return cat.id .. ":" .. buff.spellID
-    end
-    for _, altSpellID in ipairs(buff.altSpellIDs or {}) do
-        local normalizedAltSpellID = GB.NormalizeSpellID and GB.NormalizeSpellID(altSpellID) or tonumber(altSpellID)
-        if normalizedAltSpellID then
-            return cat.id .. ":" .. normalizedAltSpellID
-        end
-    end
-    return cat.id
+    return (GB.GetBuffKey and GB.GetBuffKey(cat.id, buff)) or cat.id
 end
 
 local function EnsureDefaultCategoryState(cat)
@@ -227,8 +215,8 @@ GB.DEFAULTS = {
     },
     categories = {
         food = { enabled = true, selectedKey = "food:242299" },
-        phial = { enabled = true, selectedKey = "phial:241316" },
-        steamphial = { enabled = true, selectedKey = "steamphial:191347" },
+        phial = { enabled = true, selectedKey = "phial:haranir_perception" },
+        steamphial = { enabled = true, selectedKey = "steamphial:steaming_finesse" },
         potion = { enabled = true, selectedKey = "potion:124671" },
         weaponstone = { enabled = true, selectedKey = "weaponstone:237373" },
     },
@@ -664,7 +652,20 @@ function GB:HasTrackedProfitProfession()
     return next(self:GetTrackedProfitProfessionMap()) ~= nil
 end
 
+local BUFF_RANK_IGNORED_CATEGORIES = {
+    phial = true,
+    steamphial = true,
+    potion = true,
+}
+
+function GB.CategoryIgnoresBuffRanks(catID)
+    return BUFF_RANK_IGNORED_CATEGORIES[catID] == true
+end
+
 function GB.GetBuffKey(catID, buff)
+    if buff and type(buff.selectionKey) == "string" and buff.selectionKey ~= "" then
+        return buff.selectionKey
+    end
     if buff.itemIDs and buff.itemIDs[1] then
         return catID .. ":" .. buff.itemIDs[1]
     end
@@ -816,6 +817,19 @@ function GB.GetBuffDisplayName(buff)
     end
 
     return buff.name
+end
+
+function GB.GetBuffDisplayLabel(catID, buff, includeQuality)
+    local label = GB.GetBuffDisplayName(buff)
+    if not label then
+        return nil
+    end
+    if GB.CategoryIgnoresBuffRanks(catID) then
+        label = label:gsub("%s*%([Qq]%d+%)$", "")
+    elseif includeQuality and buff and buff.quality then
+        label = label .. " " .. GB.FormatQualityText(buff.quality)
+    end
+    return label
 end
 
 function GB.GetBuffDefBySpellID(catID, spellID)
@@ -1028,9 +1042,25 @@ function GB.GetSpellCooldownInfo(spellID)
     }
 end
 
-function GB.GetBuffCount(buff)
+function GB.GetBuffCount(buff, catID)
     if not buff or not buff.itemIDs or #buff.itemIDs == 0 then
         return nil
+    end
+    if catID and GB.CategoryIgnoresBuffRanks(catID) then
+        local cat = GB.GetCatDef(catID)
+        local buffKey = GB.GetBuffKey(catID, buff)
+        local total, seenItemIDs = 0, {}
+        for _, candidate in ipairs((cat and cat.buffs) or {}) do
+            if GB.GetBuffKey(catID, candidate) == buffKey then
+                for _, itemID in ipairs(candidate.itemIDs or {}) do
+                    if not seenItemIDs[itemID] then
+                        seenItemIDs[itemID] = true
+                        total = total + GB:GetCachedItemCount(itemID)
+                    end
+                end
+            end
+        end
+        return total
     end
     local total = 0
     for _, itemID in ipairs(buff.itemIDs) do
@@ -1932,11 +1962,7 @@ function GB.GetItemLinkEnchantID(itemLink)
     return nil
 end
 
-local KNOWN_TOOL_ENCHANT_SPELLS = {
-    [7367] = 458929, -- Ironclaw Razorstone Q1
-    [7368] = 458930, -- Ironclaw Razorstone Q2
-    [7369] = 458931, -- Ironclaw Razorstone Q3
-}
+local KNOWN_TOOL_ENCHANT_SPELLS = {}
 
 function GB.GetToolEnchantSpellID(enchantID)
     enchantID = tonumber(enchantID)

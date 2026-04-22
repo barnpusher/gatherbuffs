@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.99.20
+
+- Removed pre-Midnight razorstones from buff tracking and settings
+- Collapsed potion and phial rank variants into shared buff selections so tracking and settings ignore item rank
+
 ## 0.99.19
 
 - Updated retail interface compatibility for the Midnight 12.0.5 client

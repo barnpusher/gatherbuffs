@@ -113,10 +113,7 @@ local function MakeOptRow(parent, cat, yTop, profID)
         if not buff then
             return "-"
         end
-        local label = GB.GetBuffDisplayName(buff) or "-"
-        if buff.quality then
-            label = label .. " " .. GB.FormatQualityText(buff.quality)
-        end
+        local label = GB.GetBuffDisplayLabel(cat.id, buff, true) or "-"
         if buff.stats then
             local bestStat, bestVal = nil, 0
             for statID, val in pairs(buff.stats) do
@@ -136,9 +133,14 @@ local function MakeOptRow(parent, cat, yTop, profID)
     end
     refresh()
     local items = {}
+    local seenKeys = {}
     for _, buff in ipairs(cat.buffs) do
         if GB.BuffMatchesProfession(buff, profID) then
-            table.insert(items, { label = BuffLabel(buff), value = GB.GetBuffKey(cat.id, buff) })
+            local buffKey = GB.GetBuffKey(cat.id, buff)
+            if not seenKeys[buffKey] then
+                seenKeys[buffKey] = true
+                table.insert(items, { label = BuffLabel(buff), value = buffKey })
+            end
         end
     end
     local list = MakeDropList(items, function(value)
