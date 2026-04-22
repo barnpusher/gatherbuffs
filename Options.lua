@@ -684,12 +684,32 @@ function GB:BuildOptions()
         if td.prof then
             local pc = contentFrames[td.id]
             MakeProfOptRow(pc, td.prof, 0)
+            local y = -28
             local catList = td.prof:GetBuffCategoryIDs()
-            for i, catID in ipairs(catList) do
+            for _, catID in ipairs(catList) do
                 local cat = GB.GetCatDef(catID)
                 if cat then
-                    MakeOptRow(pc, cat, -(28 * i), td.prof.id)
+                    MakeOptRow(pc, cat, y, td.prof.id)
+                    y = y - 28
                 end
+            end
+            if td.prof.id == "enchanting" then
+                MakeBoolOptRow(pc, "Block disenchant without Shattered Essence", y,
+                    function()
+                        return GB.db.modules.enchantingRequireShatteredEssence == true
+                    end,
+                    function(value)
+                        GB.db.modules.enchantingRequireShatteredEssence = value and true or false
+                        if value then
+                            GB:MaybeBlockDisenchant()
+                        end
+                    end)
+                y = y - 24
+            end
+            if y < -260 then
+                pc:SetHeight(math.abs(y) + 80)
+            else
+                pc:SetHeight(400)
             end
         end
     end

@@ -1,8 +1,8 @@
-## Interface: 120001
+## Interface: 120005, 120001
 ## Title: GatherBuffs
 ## Notes: Tracks gathering and consumable buff timers for Midnight
 ## Author: Barnpusher
-## Version: 0.99.18
+## Version: 0.99.19
 ## X-Curse-Project-ID: 1486906
 ## SavedVariables: GatherBuffsDB
 ## SavedVariablesPerCharacter: GatherBuffsCharDB

@@ -5,6 +5,39 @@ local PAD = GB.PAD
 local QUAL_ICON = GB.QUAL_ICON
 local MIN_GPH_ELAPSED = 60
 
+local GATHER_ACTION_INFO = {
+    mining = {
+        summaryLabel = "Mining nodes",
+        unitSingular = "node",
+        unitPlural = "nodes",
+    },
+    herbalism = {
+        summaryLabel = "Herb nodes",
+        unitSingular = "node",
+        unitPlural = "nodes",
+    },
+    skinning = {
+        summaryLabel = "Skinned creatures",
+        unitSingular = "creature",
+        unitPlural = "creatures",
+    },
+    fishing = {
+        summaryLabel = "Fishing catches",
+        unitSingular = "catch",
+        unitPlural = "catches",
+    },
+    tailoring = {
+        summaryLabel = "Tailoring drops",
+        unitSingular = "drop",
+        unitPlural = "drops",
+    },
+    enchanting = {
+        summaryLabel = "Disenchants",
+        unitSingular = "disenchant",
+        unitPlural = "disenchants",
+    },
+}
+
 local function GetGatherGroupKey(lookupInfo, itemID)
     local entry = lookupInfo and lookupInfo.entry
     if entry and entry.ids and #entry.ids > 0 then
@@ -49,6 +82,38 @@ local function GetGatherGroupDisplayName(lookupInfo, itemID)
     return GB.GetItemNameByID(itemID) or ("item:" .. itemID)
 end
 
+local function GetGatherActionInfo(profID)
+    local info = GATHER_ACTION_INFO[profID]
+    if info then
+        return info
+    end
+
+    local profDef = GB.GetProfDef and GB.GetProfDef(profID) or nil
+    local label = profDef and profDef:GetLabel() or GetGatherKeyLabel(profID) or tostring(profID)
+    return {
+        summaryLabel = label .. " gathers",
+        unitSingular = "gather",
+        unitPlural = "gathers",
+    }
+end
+
+local function FormatAverageCount(value)
+    local num = tonumber(value) or 0
+    if num <= 0 then
+        return "0"
+    end
+
+    local text
+    if num >= 10 then
+        text = string.format("%.1f", num)
+    else
+        text = string.format("%.2f", num)
+    end
+
+    text = text:gsub("(%..-)0+$", "%1"):gsub("%.$", "")
+    return text
+end
+
 function GB:GetActiveElapsed()
     local paused = self.sessionPaused
     local total = self.sessionPausedTotal or 0
@@ -72,6 +137,7 @@ function GB:LoadSessionState()
     self.sessionOrder = {}
     self.sessionVendorLoot = {}
     self.sessionVendorOrder = {}
+    self.sessionGatherCounts = {}
 
     for itemID, count in pairs(session.inventoryBaseline or {}) do
         local normalizedID = tonumber(itemID)
@@ -112,6 +178,13 @@ function GB:LoadSessionState()
             table.insert(self.sessionVendorOrder, item.itemID)
         end
     end
+
+    for profID, count in pairs(session.gatherCounts or {}) do
+        local normalizedCount = tonumber(count)
+        if type(profID) == "string" and normalizedCount and normalizedCount > 0 then
+            self.sessionGatherCounts[profID] = normalizedCount
+        end
+    end
     self.profitUiDirty = true
 end
 
@@ -127,6 +200,7 @@ function GB:SaveSessionState()
         order = {},
         vendorLoot = {},
         vendorOrder = {},
+        gatherCounts = {},
     }
 
     for itemID, count in pairs(self.sessionBaseline or {}) do
@@ -165,6 +239,12 @@ function GB:SaveSessionState()
                 count = item.count or 0,
                 firstSeen = item.firstSeen or self.sessionStart,
             }
+        end
+    end
+
+    for profID, count in pairs(self.sessionGatherCounts or {}) do
+        if type(profID) == "string" and count and count > 0 then
+            session.gatherCounts[profID] = count
         end
     end
 
@@ -239,6 +319,9 @@ function GB:ResetSession()
     self.sessionOrder = {}
     self.sessionVendorLoot = {}
     self.sessionVendorOrder = {}
+    self.sessionGatherCounts = {}
+    self.lootWindowActive = false
+    self.lootWindowProfessions = nil
     self.lastGphValue = 0
     self.lastGphUpdateTime = nil
     self.gphDirty = true
@@ -296,6 +379,102 @@ function GB:TrackVendorLoot(itemID, amount, link)
     self.gphDirty = true
     self:MarkProfitUiDirty()
     self:SaveSessionState()
+end
+
+function GB:GetTrackedGatherProfessions(itemID, trackedProfMap)
+    local info = self.gatherLookup and self.gatherLookup[itemID]
+    if not info or not info.profs then
+        return {}
+    end
+
+    local profs = {}
+    for profID in pairs(info.profs) do
+        if not trackedProfMap or trackedProfMap[profID] then
+            profs[#profs + 1] = profID
+        end
+    end
+    table.sort(profs)
+    return profs
+end
+
+function GB:IsEnchantingTrackingBlocked(itemID, trackedProfMap)
+    if not (self.db and self.db.modules and self.db.modules.enchantingRequireShatteredEssence) then
+        return false
+    end
+    if not self:IsProfessionModuleEnabled("enchanting") then
+        return false
+    end
+
+    local info = self.gatherLookup and self.gatherLookup[itemID]
+    if not (info and info.profs and info.profs.enchanting) then
+        return false
+    end
+
+    if trackedProfMap and not trackedProfMap.enchanting then
+        return false
+    end
+
+    for profID in pairs(info.profs) do
+        if profID ~= "enchanting" and ((not trackedProfMap) or trackedProfMap[profID]) then
+            return false
+        end
+    end
+
+    if self.HasShatteredEssenceAura and self:HasShatteredEssenceAura() then
+        return false
+    end
+
+    return true
+end
+
+function GB:MarkLootWindowProfessions(profs)
+    if not self.lootWindowActive or type(profs) ~= "table" or #profs == 0 then
+        return
+    end
+
+    self.lootWindowProfessions = self.lootWindowProfessions or {}
+    for _, profID in ipairs(profs) do
+        self.lootWindowProfessions[profID] = true
+    end
+end
+
+function GB:RecordGatherActions(profSet)
+    if type(profSet) ~= "table" then
+        return false
+    end
+
+    self.sessionGatherCounts = self.sessionGatherCounts or {}
+    local changed = false
+    for profID in pairs(profSet) do
+        self.sessionGatherCounts[profID] = (self.sessionGatherCounts[profID] or 0) + 1
+        changed = true
+    end
+
+    if changed then
+        self:SaveSessionState()
+    end
+
+    return changed
+end
+
+function GB:FinalizeLootWindow()
+    if self.lootWindowProfessions then
+        self:RecordGatherActions(self.lootWindowProfessions)
+    end
+    self.lootWindowActive = false
+    self.lootWindowProfessions = nil
+end
+
+function GB:HandleLootOpened()
+    if self.lootWindowActive then
+        self:FinalizeLootWindow()
+    end
+    self.lootWindowActive = true
+    self.lootWindowProfessions = {}
+end
+
+function GB:HandleLootClosed()
+    self:FinalizeLootWindow()
 end
 
 function GB:GetBagItemCount(itemID)
@@ -490,6 +669,7 @@ function GB:BuildProfitReportLines()
     local elapsed = self:GetActiveElapsed()
     local grouped, groupOrder, groupDisplay, totalValue = self:BuildCurrentProfitGroups(false)
     local vendorValue, vendorCount = self:BuildVendorLootSummary()
+    local trackedProfMap = self:GetTrackedProfitProfessionMap()
     totalValue = totalValue + vendorValue
 
     local gphValue = 0
@@ -500,6 +680,34 @@ function GB:BuildProfitReportLines()
     lines[#lines + 1] = string.format("Per hour: %s", GB.FormatGoldPlain(gphValue))
     if vendorValue > 0 then
         lines[#lines + 1] = string.format("Vendor loot: %s (%d items)", GB.FormatGoldPlain(vendorValue), vendorCount)
+    end
+
+    for _, prof in ipairs(GB.GetProfessionDefs()) do
+        local actionCount = self.sessionGatherCounts and self.sessionGatherCounts[prof.id] or 0
+        if actionCount and actionCount > 0 then
+            local info = GetGatherActionInfo(prof.id)
+            local profValue = 0
+            for _, itemID in ipairs(self.sessionOrder or {}) do
+                local item = self.sessionLoot and self.sessionLoot[itemID]
+                local sessionCount = item and item.activeCount or 0
+                if sessionCount > 0 then
+                    local profs = self:GetTrackedGatherProfessions(itemID, trackedProfMap)
+                    for _, trackedProfID in ipairs(profs) do
+                        if trackedProfID == prof.id then
+                            profValue = profValue + ((item.price or self:GetPrice(itemID) or 0) * sessionCount)
+                            break
+                        end
+                    end
+                end
+            end
+            lines[#lines + 1] = string.format(
+                "%s: %d (avg %s/%s)",
+                info.summaryLabel,
+                actionCount,
+                GB.FormatGoldPlain(math.floor(profValue / actionCount)),
+                info.unitSingular
+            )
+        end
     end
 
     for _, groupKey in ipairs(groupOrder) do
@@ -517,12 +725,28 @@ function GB:BuildProfitReportLines()
             local suffix = multiQ and (" Q" .. (lookup.tier or 1)) or ""
             local unitPrice = item and item.price and GB.FormatGoldPlain(item.price) or "?"
             local count = item and item.count or 0
+            local avgCountSuffix = ""
+            local profs = self:GetTrackedGatherProfessions(item.itemID, trackedProfMap)
+            if #profs == 1 then
+                local profID = profs[1]
+                local actionCount = self.sessionGatherCounts and self.sessionGatherCounts[profID] or 0
+                local sessionCount = item.sessionCount or count
+                if actionCount and actionCount > 0 and sessionCount > 0 then
+                    local actionInfo = GetGatherActionInfo(profID)
+                    avgCountSuffix = string.format(
+                        " (avg %s/%s)",
+                        FormatAverageCount(sessionCount / actionCount),
+                        actionInfo.unitSingular
+                    )
+                end
+            end
             local lineValue = (item and item.price or 0) * count
             lines[#lines + 1] = string.format(
-                "%s%s: %d @ %s - %s",
+                "%s%s: %d%s @ %s - %s",
                 label,
                 suffix,
                 count,
+                avgCountSuffix,
                 unitPrice,
                 GB.FormatGoldPlain(lineValue)
             )
@@ -1364,16 +1588,30 @@ end
 
 function GB:HandleLootItem(itemID, amount, itemLink, trackedProfMap)
     if not itemID or not amount or amount <= 0 then
-        return
+        return nil
     end
 
     trackedProfMap = trackedProfMap or self:GetTrackedProfitProfessionMap()
     self.lastLootAt = time()
 
+    if self:IsEnchantingTrackingBlocked(itemID, trackedProfMap) then
+        local name = GetItemInfo(itemID) or "?"
+        self:AppendLootLog(string.format("%s  skipped  id=%-8d  x%-3d  %s  (missing Shattered Essence)", date("%H:%M:%S"), itemID, amount, name))
+        if self.lootDebug then
+            print("|cffaaffaaGB skipped:|r id=" .. itemID .. " x" .. amount .. " (missing Shattered Essence)")
+        end
+        return {
+            countedGather = false,
+            profs = {},
+        }
+    end
+
     local ignored = GATHERBUFFS_LOOT_IGNORE and GATHERBUFFS_LOOT_IGNORE[itemID]
-    local isGatherMat = not GB.merchantIsOpen and GB.IsGatheringMat(itemID, trackedProfMap, self.gatherLookup)
+    local gatherProfs = self:GetTrackedGatherProfessions(itemID, trackedProfMap)
+    local isGatherMat = not GB.merchantIsOpen and #gatherProfs > 0
     local isVendorItem = not ignored and not GB.merchantIsOpen and self:ShouldIncludeVendorLootItem(itemID)
     local countsForProfit = not ignored and (isGatherMat or isVendorItem)
+    local countedGather = false
 
     if countsForProfit then
         self:MaybeAutoStartSession()
@@ -1391,7 +1629,9 @@ function GB:HandleLootItem(itemID, amount, itemLink, trackedProfMap)
         self:TrackLoot(itemID, amount, itemLink, countsForProfit)
     end
     if isGatherMat and countsForProfit then
+        self:MarkLootWindowProfessions(gatherProfs)
         self:TrackVendorLoot(itemID, amount, itemLink)
+        countedGather = true
         local name = GetItemInfo(itemID) or "?"
         self:AppendLootLog(string.format("%s  tracked  id=%-8d  x%-3d  %s", date("%H:%M:%S"), itemID, amount, name))
         if self.lootDebug then
@@ -1415,6 +1655,11 @@ function GB:HandleLootItem(itemID, amount, itemLink, trackedProfMap)
             end
         end
     end
+
+    return {
+        countedGather = countedGather,
+        profs = gatherProfs,
+    }
 end
 
 function GB:ProcessInventoryLootDelta()
@@ -1430,13 +1675,23 @@ function GB:ProcessInventoryLootDelta()
     self.pendingLootScan = false
     local trackedProfMap = self:GetTrackedProfitProfessionMap()
     local matched = false
+    local profSet = {}
 
     for itemID, currentCount in pairs(current) do
         local delta = currentCount - (previous[itemID] or 0)
         if delta > 0 then
             matched = true
-            self:HandleLootItem(itemID, delta, nil, trackedProfMap)
+            local result = self:HandleLootItem(itemID, delta, nil, trackedProfMap)
+            if result and result.countedGather and result.profs then
+                for _, profID in ipairs(result.profs) do
+                    profSet[profID] = true
+                end
+            end
         end
+    end
+
+    if not self.lootWindowActive then
+        self:RecordGatherActions(profSet)
     end
 
     if self.lootDebug and not matched then

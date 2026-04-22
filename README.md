@@ -58,4 +58,4 @@ If you hit a bug, please run `/gb debug`, copy the output, and open an issue on 
 ## Compatibility
 
 - World of Warcraft Retail
-- Interface `120001`
+- Interface `120005, 120001`

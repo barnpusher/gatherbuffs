@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.99.19
+
+- Updated retail interface compatibility for the Midnight 12.0.5 client
+- Improved combat handling so buff rows stay frozen in their last out-of-combat state when visible, and the Buffs section title switches to `Combat`
+- Added an Enchanting main card with tool details and a setting to block disenchanting unless `Shattered Essence` is active
+- Added loot-window and current-cast event handling to improve disenchant gating and gather-action tracking
+- Added per-profession gather-action counts to session state and expanded profit reports with average value and yield per action
+
 ## 0.99.18
 
 - Modularize professions

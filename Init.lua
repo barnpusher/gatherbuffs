@@ -89,6 +89,9 @@ function GB:Init()
     evf:RegisterEvent("UNIT_AURA")
     evf:RegisterEvent("BAG_UPDATE_DELAYED")
     evf:RegisterEvent("CHAT_MSG_LOOT")
+    evf:RegisterEvent("CURRENT_SPELL_CAST_CHANGED")
+    evf:RegisterEvent("LOOT_OPENED")
+    evf:RegisterEvent("LOOT_CLOSED")
     evf:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
     evf:RegisterEvent("SKILL_LINES_CHANGED")
     evf:RegisterEvent("SKILL_LINE_SPECS_RANKS_CHANGED")
@@ -109,11 +112,18 @@ function GB:Init()
             GB.lastLootAt = time()
             return
         elseif event == "UNIT_AURA" and arg1 == "player" then
+            GB:MaybeBlockDisenchant()
             if InCombatLockdown() then
                 return
             end
             GB.vitalsNeedsRefresh = true
             GB:UpdateBars()
+        elseif event == "CURRENT_SPELL_CAST_CHANGED" then
+            GB:MaybeBlockDisenchant()
+        elseif event == "LOOT_OPENED" then
+            GB:HandleLootOpened()
+        elseif event == "LOOT_CLOSED" then
+            GB:HandleLootClosed()
         elseif event == "CHAT_MSG_LOOT" then
             GB:HandleLoot(arg1)
             GB:UpdateProfit()

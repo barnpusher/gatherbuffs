@@ -196,6 +196,7 @@ GB.DEFAULTS = {
         alertOnLowStock = false,
         profitVendorLoot = false,
         profitVendorLootExcludeGear = false,
+        enchantingRequireShatteredEssence = false,
         profitTracking = {
             mining = true,
             herbalism = true,

@@ -326,9 +326,11 @@ function GB:UpdateSummary()
     end
     self.commonPanel.title:Show()
     if inCombat then
-        self.commonPanel.summary:SetText("|cffdd3333⚔ In Combat|r")
+        self.commonPanel.title:SetText("Combat")
+        self.commonPanel.summary:SetText("")
         return
     end
+    self.commonPanel.title:SetText("Buffs")
     local active, maxTracked = 0, 0
     for _, row in ipairs(self.activeCommonRows or {}) do
         local buff, aura = self:GetRowBuff(row.catID, row.profID)
