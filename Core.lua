@@ -865,82 +865,6 @@ function GB.IsMaxQualityBuff(catID, buff, profID)
     return buff.quality >= maxQuality
 end
 
-function GB:GetRecentConsumableBuff(catID, candidates)
-    local recent = self.recentConsumableUses and self.recentConsumableUses[catID]
-    if not (recent and recent.expiresAt and recent.expiresAt > GetTime()) then
-        return nil
-    end
-
-    local pool = candidates
-    if not pool then
-        local cat = GB.GetCatDef(catID)
-        pool = cat and cat.buffs or nil
-    end
-    if not pool then
-        return nil
-    end
-
-    if recent.buffKey then
-        for _, buff in ipairs(pool) do
-            if GB.GetBuffKey(catID, buff) == recent.buffKey then
-                return buff
-            end
-        end
-    end
-
-    for _, buff in ipairs(pool) do
-        for _, itemID in ipairs(buff.itemIDs or {}) do
-            if itemID == recent.itemID then
-                return buff
-            end
-        end
-    end
-
-    for _, buff in ipairs(pool) do
-        if recent.spellID and GB.BuffHasSpellID(buff, recent.spellID) then
-            return buff
-        end
-    end
-
-    return nil
-end
-
-function GB:TrackRecentConsumableUses()
-    if not self.BuildInventorySnapshot then
-        return
-    end
-
-    local previous = self.inventorySnapshot
-    if not previous then
-        return
-    end
-
-    local current = self:BuildInventorySnapshot()
-    local recent = self.recentConsumableUses or {}
-    local now = GetTime()
-
-    for _, cat in ipairs(GATHERBUFFS_CATEGORIES or {}) do
-        for _, buff in ipairs(cat.buffs or {}) do
-            for _, itemID in ipairs(buff.itemIDs or {}) do
-                local before = previous[itemID] or 0
-                local after = current[itemID] or 0
-                if after < before then
-                    local duration = tonumber(buff.maxDuration) or 30
-                    recent[cat.id] = {
-                        at = now,
-                        expiresAt = now + math.max(30, duration),
-                        itemID = itemID,
-                        spellID = buff.spellID,
-                        buffKey = GB.GetBuffKey(cat.id, buff),
-                    }
-                end
-            end
-        end
-    end
-
-    self.recentConsumableUses = recent
-end
-
 function GB.GetBuffDefBySpellID(catID, spellID)
     local cat = GB.GetCatDef(catID)
     local normalizedSpellID = GB.NormalizeSpellID(spellID)
@@ -1171,11 +1095,6 @@ function GB.ResolveAuraBuff(catID, aura, profID, preferredBuff)
     local tooltipBuff = ResolveAuraBuffFromTooltip(aura, candidates)
     if tooltipBuff then
         return tooltipBuff
-    end
-
-    local recentBuff = GB.GetRecentConsumableBuff and GB:GetRecentConsumableBuff(catID, candidates)
-    if recentBuff then
-        return recentBuff
     end
 
     local auraValues = GB.GetAuraNumericValues(aura)
@@ -2245,14 +2164,7 @@ function GB.GetProfessionToolEnchantInfoFromInfo(info, slots, enchantStats)
     end
 
     local spellID = GB.GetToolEnchantSpellID(enchantID)
-    local recentWeaponstoneBuff = GB.GetRecentConsumableBuff and GB:GetRecentConsumableBuff("weaponstone")
-    local preferredWeaponstoneBuff = recentWeaponstoneBuff
-    if not preferredWeaponstoneBuff and GB.GetSelectedBuff then
-        preferredWeaponstoneBuff = GB.GetSelectedBuff(GB, "weaponstone", info.id) or nil
-    end
-    if not spellID and recentWeaponstoneBuff and recentWeaponstoneBuff.spellID then
-        spellID = recentWeaponstoneBuff.spellID
-    end
+    local preferredWeaponstoneBuff = GB.GetSelectedBuff and GB.GetSelectedBuff(GB, "weaponstone", info.id) or nil
     if not spellID then
         enchantStats = enchantStats or GB.GetInventorySlotEnchantStats(slots.tool)
         spellID = GB.ResolveWeaponstoneSpellIDFromTooltip(slots.tool, info.id, enchantStats, preferredWeaponstoneBuff)

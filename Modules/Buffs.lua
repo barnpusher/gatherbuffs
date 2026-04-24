@@ -19,10 +19,6 @@ local function CheckEquipped(cat, buff, profID)
                 if enchantInfo.enchantID and buff and GB.BuffHasSpellID(buff, enchantInfo.enchantID) then
                     return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
                 end
-                local recentBuff = GB.GetRecentConsumableBuff and GB:GetRecentConsumableBuff(cat.id)
-                if recentBuff and buff and recentBuff.spellID and GB.BuffHasSpellID(buff, recentBuff.spellID) then
-                    return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
-                end
                 local slots = static and static.slots or GB.GetProfessionEquipmentSlots(info)
                 local enchantStats = static and static.enchantStats or (slots and slots.tool and GB.GetInventorySlotEnchantStats(slots.tool) or nil)
                 local selectedBuff = GB.GetSelectedBuff and GB:GetSelectedBuff(cat.id, profID) or nil

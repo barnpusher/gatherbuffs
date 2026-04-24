@@ -128,7 +128,6 @@ function GB:Init()
             GB:HandleLoot(arg1)
             GB:UpdateProfit()
         elseif event == "BAG_UPDATE_DELAYED" then
-            GB:TrackRecentConsumableUses()
             GB:InvalidateItemCountCache()
             GB:ProcessInventoryLootDelta()
             GB:ProcessPendingLoot()
