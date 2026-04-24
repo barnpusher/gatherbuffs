@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.99.23
+
+- Release refresh with no code changes beyond version metadata
+
 ## 0.99.22
 
 - Removed consumable inventory-diff fallback logic so food resolves only from aura data and weaponstones resolve only from tool enchant state
