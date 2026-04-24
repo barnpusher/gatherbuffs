@@ -696,14 +696,14 @@ function GB:BuildOptions()
                 end
             end
             if td.prof.id == "enchanting" then
-                MakeBoolOptRow(pc, "Block disenchant without Shattered Essence", y,
+                MakeBoolOptRow(pc, "Warn on disenchant without Shattered Essence", y,
                     function()
                         return GB.db.modules.enchantingRequireShatteredEssence == true
                     end,
                     function(value)
                         GB.db.modules.enchantingRequireShatteredEssence = value and true or false
                         if value then
-                            GB:MaybeBlockDisenchant()
+                            GB:MaybeWarnDisenchant()
                         end
                     end)
                 y = y - 24

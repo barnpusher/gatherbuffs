@@ -112,14 +112,14 @@ function GB:Init()
             GB.lastLootAt = time()
             return
         elseif event == "UNIT_AURA" and arg1 == "player" then
-            GB:MaybeBlockDisenchant()
+            GB:MaybeWarnDisenchant()
             if InCombatLockdown() then
                 return
             end
             GB.vitalsNeedsRefresh = true
             GB:UpdateBars()
         elseif event == "CURRENT_SPELL_CAST_CHANGED" then
-            GB:MaybeBlockDisenchant()
+            GB:MaybeWarnDisenchant()
         elseif event == "LOOT_OPENED" then
             GB:HandleLootOpened()
         elseif event == "LOOT_CLOSED" then
@@ -128,6 +128,7 @@ function GB:Init()
             GB:HandleLoot(arg1)
             GB:UpdateProfit()
         elseif event == "BAG_UPDATE_DELAYED" then
+            GB:TrackRecentConsumableUses()
             GB:InvalidateItemCountCache()
             GB:ProcessInventoryLootDelta()
             GB:ProcessPendingLoot()
@@ -163,7 +164,14 @@ function GB:Init()
     end)
 
     local tick = 0
+    local disenchantWarnTick = 0
     self.mainFrame:SetScript("OnUpdate", function(_, dt)
+        disenchantWarnTick = disenchantWarnTick + dt
+        if disenchantWarnTick >= 0.10 then
+            disenchantWarnTick = 0
+            GB:MaybeWarnDisenchant()
+        end
+
         tick = tick + dt
         if tick >= 1.0 then
             tick = 0

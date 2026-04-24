@@ -218,7 +218,7 @@ GB.DEFAULTS = {
         phial = { enabled = true, selectedKey = "phial:haranir_perception" },
         steamphial = { enabled = true, selectedKey = "steamphial:steaming_finesse" },
         potion = { enabled = true, selectedKey = "potion:124671" },
-        weaponstone = { enabled = true, selectedKey = "weaponstone:237373" },
+        weaponstone = { enabled = true, selectedKey = "weaponstone:refulgent_razorstone" },
     },
 }
 
@@ -656,6 +656,7 @@ local BUFF_RANK_IGNORED_CATEGORIES = {
     phial = true,
     steamphial = true,
     potion = true,
+    weaponstone = true,
 }
 
 function GB.CategoryIgnoresBuffRanks(catID)
@@ -832,6 +833,114 @@ function GB.GetBuffDisplayLabel(catID, buff, includeQuality)
     return label
 end
 
+function GB.GetMaxBuffQuality(catID, buff, profID)
+    if not buff then
+        return nil
+    end
+    local cat = GB.GetCatDef(catID)
+    if not cat then
+        return buff.quality
+    end
+    local targetKey = GB.GetBuffKey(catID, buff)
+    local maxQuality = buff.quality
+    for _, candidate in ipairs(cat.buffs or {}) do
+        if GB.GetBuffKey(catID, candidate) == targetKey
+            and GB.BuffMatchesProfession(candidate, profID)
+            and candidate.quality
+            and (not maxQuality or candidate.quality > maxQuality) then
+            maxQuality = candidate.quality
+        end
+    end
+    return maxQuality
+end
+
+function GB.IsMaxQualityBuff(catID, buff, profID)
+    if not buff then
+        return false
+    end
+    local maxQuality = GB.GetMaxBuffQuality(catID, buff, profID)
+    if not maxQuality or not buff.quality then
+        return true
+    end
+    return buff.quality >= maxQuality
+end
+
+function GB:GetRecentConsumableBuff(catID, candidates)
+    local recent = self.recentConsumableUses and self.recentConsumableUses[catID]
+    if not (recent and recent.expiresAt and recent.expiresAt > GetTime()) then
+        return nil
+    end
+
+    local pool = candidates
+    if not pool then
+        local cat = GB.GetCatDef(catID)
+        pool = cat and cat.buffs or nil
+    end
+    if not pool then
+        return nil
+    end
+
+    if recent.buffKey then
+        for _, buff in ipairs(pool) do
+            if GB.GetBuffKey(catID, buff) == recent.buffKey then
+                return buff
+            end
+        end
+    end
+
+    for _, buff in ipairs(pool) do
+        for _, itemID in ipairs(buff.itemIDs or {}) do
+            if itemID == recent.itemID then
+                return buff
+            end
+        end
+    end
+
+    for _, buff in ipairs(pool) do
+        if recent.spellID and GB.BuffHasSpellID(buff, recent.spellID) then
+            return buff
+        end
+    end
+
+    return nil
+end
+
+function GB:TrackRecentConsumableUses()
+    if not self.BuildInventorySnapshot then
+        return
+    end
+
+    local previous = self.inventorySnapshot
+    if not previous then
+        return
+    end
+
+    local current = self:BuildInventorySnapshot()
+    local recent = self.recentConsumableUses or {}
+    local now = GetTime()
+
+    for _, cat in ipairs(GATHERBUFFS_CATEGORIES or {}) do
+        for _, buff in ipairs(cat.buffs or {}) do
+            for _, itemID in ipairs(buff.itemIDs or {}) do
+                local before = previous[itemID] or 0
+                local after = current[itemID] or 0
+                if after < before then
+                    local duration = tonumber(buff.maxDuration) or 30
+                    recent[cat.id] = {
+                        at = now,
+                        expiresAt = now + math.max(30, duration),
+                        itemID = itemID,
+                        spellID = buff.spellID,
+                        buffKey = GB.GetBuffKey(cat.id, buff),
+                    }
+                end
+            end
+        end
+    end
+
+    self.recentConsumableUses = recent
+end
+
 function GB.GetBuffDefBySpellID(catID, spellID)
     local cat = GB.GetCatDef(catID)
     local normalizedSpellID = GB.NormalizeSpellID(spellID)
@@ -946,6 +1055,98 @@ function GB.GetAuraNumericValues(aura)
     return values
 end
 
+local function CollectTooltipTextLine(text, lines)
+    if type(text) == "string" and text ~= "" then
+        lines[#lines + 1] = text
+    end
+end
+
+local function ReadAuraTooltipTextDataLine(line, lines)
+    if not line then
+        return
+    end
+
+    if (not line.leftText and not line.rightText) and TooltipUtil and TooltipUtil.SurfaceArgs then
+        pcall(TooltipUtil.SurfaceArgs, line)
+    end
+
+    CollectTooltipTextLine(line.leftText, lines)
+    CollectTooltipTextLine(line.rightText, lines)
+
+    for _, child in ipairs(line.lines or {}) do
+        ReadAuraTooltipTextDataLine(child, lines)
+    end
+end
+
+function GB.GetAuraTooltipText(aura, helpful)
+    local lines = {}
+    if not (aura and aura.auraInstanceID and C_TooltipInfo) then
+        return lines
+    end
+
+    local getter = helpful and C_TooltipInfo.GetUnitBuffByAuraInstanceID or C_TooltipInfo.GetUnitDebuffByAuraInstanceID
+    if type(getter) ~= "function" then
+        return lines
+    end
+
+    local ok, data = pcall(getter, "player", aura.auraInstanceID)
+    if not (ok and data and data.lines) then
+        return lines
+    end
+
+    for _, line in ipairs(data.lines) do
+        ReadAuraTooltipTextDataLine(line, lines)
+    end
+    return lines
+end
+
+local function GetBuffPrimaryStatID(buff)
+    if not (buff and buff.stats) then
+        return nil
+    end
+    local bestStatID, bestValue = nil, nil
+    for _, stat in ipairs(GATHERBUFFS_STAT_ORDER or {}) do
+        if stat.id ~= "speedPct" then
+            local value = buff.stats[stat.id]
+            if type(value) == "number" and value > 0 and (not bestValue or value > bestValue) then
+                bestStatID, bestValue = stat.id, value
+            end
+        end
+    end
+    return bestStatID
+end
+
+local function ResolveAuraBuffFromTooltip(aura, candidates)
+    local tooltipLines = GB.GetAuraTooltipText(aura, true)
+    if #tooltipLines == 0 then
+        return nil
+    end
+
+    local combined = table.concat(tooltipLines, "\n"):lower()
+    local bestBuff, bestScore, tied = nil, 0, false
+    for _, buff in ipairs(candidates or {}) do
+        local score = 0
+        local primaryStatID = GetBuffPrimaryStatID(buff)
+        local primaryLabel = primaryStatID and GB.GetDesiredStatLabel(primaryStatID)
+        if type(primaryLabel) == "string" and primaryLabel ~= "" and combined:find(primaryLabel:lower(), 1, true) then
+            score = score + 2
+        end
+        local buffName = GB.GetBuffDisplayName(buff)
+        if type(buffName) == "string" and buffName ~= "" and combined:find(buffName:lower(), 1, true) then
+            score = score + 1
+        end
+        if score > bestScore then
+            bestBuff, bestScore, tied = buff, score, false
+        elseif score > 0 and score == bestScore then
+            tied = true
+        end
+    end
+    if bestBuff and bestScore > 0 and not tied then
+        return bestBuff
+    end
+    return nil
+end
+
 function GB.ResolveAuraBuff(catID, aura, profID, preferredBuff)
     local cat = GB.GetCatDef(catID)
     if not (cat and aura and aura.spellId) then
@@ -965,6 +1166,16 @@ function GB.ResolveAuraBuff(catID, aura, profID, preferredBuff)
     end
     if #candidates <= 1 then
         return candidates[1] or preferredBuff
+    end
+
+    local tooltipBuff = ResolveAuraBuffFromTooltip(aura, candidates)
+    if tooltipBuff then
+        return tooltipBuff
+    end
+
+    local recentBuff = GB.GetRecentConsumableBuff and GB:GetRecentConsumableBuff(catID, candidates)
+    if recentBuff then
+        return recentBuff
     end
 
     local auraValues = GB.GetAuraNumericValues(aura)
@@ -1003,6 +1214,21 @@ function GB.GetSpellCooldownInfo(spellID)
         return nil
     end
 
+    local function SafeNumber(value, default)
+        if value == nil then
+            return default
+        end
+        local ok, text = pcall(tostring, value)
+        if not ok then
+            return default
+        end
+        local numeric = tonumber(text)
+        if numeric == nil then
+            return default
+        end
+        return numeric
+    end
+
     local startTime, duration, isEnabled, modRate
     if C_Spell and C_Spell.GetSpellCooldown then
         local ok, info = pcall(C_Spell.GetSpellCooldown, normalizedSpellID)
@@ -1020,9 +1246,9 @@ function GB.GetSpellCooldownInfo(spellID)
         end
     end
 
-    duration = tonumber(duration) or 0
-    startTime = tonumber(startTime) or 0
-    modRate = tonumber(modRate) or 1
+    duration = SafeNumber(duration, 0)
+    startTime = SafeNumber(startTime, 0)
+    modRate = SafeNumber(modRate, 1)
     if modRate <= 0 then
         modRate = 1
     end
@@ -1374,12 +1600,6 @@ local function ReadTooltipProfessionLine(line, tags)
     end
 end
 
-local function CollectTooltipTextLine(text, lines)
-    if type(text) == "string" and text ~= "" then
-        lines[#lines + 1] = text
-    end
-end
-
 local function ReadTooltipTextDataLine(line, lines)
     if not line then
         return
@@ -1711,6 +1931,24 @@ function GB.BuffStatsContainedInTotals(buff, totals)
     return matched
 end
 
+function GB.BuffStatsFitWithinTotals(buff, totals)
+    if not (buff and buff.stats and totals) then
+        return false
+    end
+    local matched = false
+    for _, stat in ipairs(GATHERBUFFS_STAT_ORDER or {}) do
+        local expected = buff.stats[stat.id] or 0
+        local actual = totals[stat.id] or 0
+        if expected ~= 0 then
+            if actual < expected then
+                return false
+            end
+            matched = true
+        end
+    end
+    return matched
+end
+
 function GB.ResolveWeaponstoneSpellIDFromStats(profID, totals, preferredBuff)
     local cat = GB.GetCatDef("weaponstone")
     if not (cat and totals) then
@@ -1719,7 +1957,7 @@ function GB.ResolveWeaponstoneSpellIDFromStats(profID, totals, preferredBuff)
 
     local candidates = {}
     for _, buff in ipairs(cat.buffs or {}) do
-        if GB.BuffMatchesProfession(buff, profID) and GB.BuffStatsContainedInTotals(buff, totals) then
+        if GB.BuffMatchesProfession(buff, profID) and GB.BuffStatsFitWithinTotals(buff, totals) then
             candidates[#candidates + 1] = buff
         end
     end
@@ -1730,7 +1968,15 @@ function GB.ResolveWeaponstoneSpellIDFromStats(profID, totals, preferredBuff)
     if #candidates == 1 then
         return candidates[1].spellID
     end
-    return nil
+    if preferredBuff then
+        local preferredKey = GB.GetBuffKey("weaponstone", preferredBuff)
+        for _, buff in ipairs(candidates) do
+            if GB.GetBuffKey("weaponstone", buff) == preferredKey or GB.BuffHasSpellID(buff, preferredBuff.spellID) then
+                return preferredBuff.spellID or buff.spellID
+            end
+        end
+    end
+    return candidates[1].spellID
 end
 
 function GB.ResolveWeaponstoneSpellIDFromTooltip(slotID, profID, totals, preferredBuff)
@@ -1745,6 +1991,7 @@ function GB.ResolveWeaponstoneSpellIDFromTooltip(slotID, profID, totals, preferr
     end
 
     local candidates = {}
+    local nameMatches = {}
     for _, buff in ipairs(cat.buffs or {}) do
         if GB.BuffMatchesProfession(buff, profID) then
             local names = {}
@@ -1768,26 +2015,40 @@ function GB.ResolveWeaponstoneSpellIDFromTooltip(slotID, profID, totals, preferr
                 end
             end
 
-            if found and (not totals or GB.BuffStatsContainedInTotals(buff, totals)) then
-                candidates[#candidates + 1] = buff
+            if found then
+                nameMatches[#nameMatches + 1] = buff
+                if (not totals) or GB.BuffStatsContainedInTotals(buff, totals) then
+                    candidates[#candidates + 1] = buff
+                end
             end
         end
     end
 
     if #candidates == 0 then
-        return nil
+        if #nameMatches == 0 then
+            return nil
+        end
+        if preferredBuff then
+            local preferredKey = GB.GetBuffKey("weaponstone", preferredBuff)
+            for _, buff in ipairs(nameMatches) do
+                if GB.GetBuffKey("weaponstone", buff) == preferredKey then
+                    return preferredBuff.spellID or buff.spellID
+                end
+            end
+        end
+        return nameMatches[1].spellID
     end
     if #candidates == 1 then
         return candidates[1].spellID
     end
     if preferredBuff and preferredBuff.name then
         for _, buff in ipairs(candidates) do
-            if buff.name == preferredBuff.name then
-                return buff.spellID
+            if buff.name == preferredBuff.name or GB.GetBuffKey("weaponstone", buff) == GB.GetBuffKey("weaponstone", preferredBuff) then
+                return preferredBuff.spellID or buff.spellID
             end
         end
     end
-    return nil
+    return candidates[1].spellID
 end
 
 function GB.ResolveWeaponstoneSpellIDFromProfessionTotals(info)
@@ -1984,7 +2245,14 @@ function GB.GetProfessionToolEnchantInfoFromInfo(info, slots, enchantStats)
     end
 
     local spellID = GB.GetToolEnchantSpellID(enchantID)
-    local preferredWeaponstoneBuff = GB.GetSelectedBuff and GB.GetSelectedBuff(GB, "weaponstone", info.id) or nil
+    local recentWeaponstoneBuff = GB.GetRecentConsumableBuff and GB:GetRecentConsumableBuff("weaponstone")
+    local preferredWeaponstoneBuff = recentWeaponstoneBuff
+    if not preferredWeaponstoneBuff and GB.GetSelectedBuff then
+        preferredWeaponstoneBuff = GB.GetSelectedBuff(GB, "weaponstone", info.id) or nil
+    end
+    if not spellID and recentWeaponstoneBuff and recentWeaponstoneBuff.spellID then
+        spellID = recentWeaponstoneBuff.spellID
+    end
     if not spellID then
         enchantStats = enchantStats or GB.GetInventorySlotEnchantStats(slots.tool)
         spellID = GB.ResolveWeaponstoneSpellIDFromTooltip(slots.tool, info.id, enchantStats, preferredWeaponstoneBuff)

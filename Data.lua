@@ -33,30 +33,27 @@ GB.RegisterCategories({
         buffs = {
             {
                 name = "Argentleaf Tea",
-                spellID = 1269152,  -- shared "Relaxed" aura
-                altSpellIDs = { 1269170 },
+                spellID = 1269170,  -- Relaxed (Finesse + Speed)
                 maxDuration = 3600,
                 itemIDs = { 242298 },
                 stats = { finesse = 50, speedPct = 3 },
-                notes = "Relaxed tea (Finesse & Speed); shares the tea slot.",
+                notes = "Relaxed tea (Finesse & Speed).",
             },
             {
                 name = "Sanguithorn Tea",
-                spellID = 1269152,  -- shared "Relaxed" aura
-                altSpellIDs = { 1269170 },
+                spellID = 1269152,  -- Relaxed (Perception + Speed)
                 maxDuration = 3600,
                 itemIDs = { 242299 },
                 stats = { perception = 50, speedPct = 3 },
-                notes = "Relaxed tea (Perception & Speed); shares the tea slot.",
+                notes = "Relaxed tea (Perception & Speed).",
             },
             {
                 name = "Azeroot Tea",
-                spellID = 1269152,  -- shared "Relaxed" aura
-                altSpellIDs = { 1269170 },
+                spellID = 1269171,  -- Relaxed (Deftness + Speed)
                 maxDuration = 3600,
                 itemIDs = { 242301 },
                 stats = { deftness = 50, speedPct = 3 },
-                notes = "Relaxed tea (Deftness & Speed); shares the tea slot.",
+                notes = "Relaxed tea (Deftness & Speed).",
             },
         },
     },
@@ -112,14 +109,6 @@ GB.RegisterCategories({
                 maxDuration = 1800,
                 itemIDs = { 241313 },
                 statsUnknown = true,  -- crafting stats only, no gathering benefit
-            },
-            {
-                name = "Phial of Truesight (TWW)",
-                spellID = nil,
-                maxDuration = 1800,
-                itemIDs = { 212309 },
-                statsUnknown = true,
-                notes = "Increases Perception and reveals camouflaged nodes; stacks only with Dragonflight phials.",
             },
         },
     },
@@ -239,6 +228,7 @@ GB.RegisterCategories({
             {
                 name = "Refulgent Razorstone",
                 quality = 2,
+                selectionKey = "weaponstone:refulgent_razorstone",
                 spellID = 1224335,
                 maxDuration = 7200,
                 itemIDs = { 237373 },
@@ -247,6 +237,7 @@ GB.RegisterCategories({
             {
                 name = "Refulgent Razorstone",
                 quality = 1,
+                selectionKey = "weaponstone:refulgent_razorstone",
                 spellID = 1224334,
                 maxDuration = 7200,
                 itemIDs = { 237372 },

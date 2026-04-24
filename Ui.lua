@@ -797,7 +797,13 @@ local function ApplyRow(row, buff, aura)
         row.tm:SetText(aura.equipped and "Worn" or GB.FormatTime(left))
         row.nm:SetTextColor(1, 1, 1)
         GB.SetRowBackground(row, 0, 0, 0, 0)
-        if pct > 0.30 then
+        if GB.CategoryIgnoresBuffRanks(row.catID) then
+            if GB.IsMaxQualityBuff(row.catID, buff, row.profID) then
+                GB.SetStatusBarColor(row.bar, 0.18, 0.72, 0.22)
+            else
+                GB.SetStatusBarColor(row.bar, 0.90, 0.72, 0.08)
+            end
+        elseif pct > 0.30 then
             GB.SetStatusBarColor(row.bar, 0.18, 0.72, 0.22)
         elseif pct > 0.10 then
             GB.SetStatusBarColor(row.bar, 0.90, 0.55, 0.08)

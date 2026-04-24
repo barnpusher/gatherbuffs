@@ -19,14 +19,18 @@ local function CheckEquipped(cat, buff, profID)
                 if enchantInfo.enchantID and buff and GB.BuffHasSpellID(buff, enchantInfo.enchantID) then
                     return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
                 end
+                local recentBuff = GB.GetRecentConsumableBuff and GB:GetRecentConsumableBuff(cat.id)
+                if recentBuff and buff and recentBuff.spellID and GB.BuffHasSpellID(buff, recentBuff.spellID) then
+                    return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
+                end
                 local slots = static and static.slots or GB.GetProfessionEquipmentSlots(info)
                 local enchantStats = static and static.enchantStats or (slots and slots.tool and GB.GetInventorySlotEnchantStats(slots.tool) or nil)
                 local selectedBuff = GB.GetSelectedBuff and GB:GetSelectedBuff(cat.id, profID) or nil
                 if selectedBuff
                     and buff
                     and GB.GetBuffKey(cat.id, selectedBuff) == GB.GetBuffKey(cat.id, buff)
-                    and GB.BuffStatsContainedInTotals
-                    and GB.BuffStatsContainedInTotals(buff, enchantStats) then
+                    and GB.BuffStatsFitWithinTotals
+                    and GB.BuffStatsFitWithinTotals(buff, enchantStats) then
                     return { equipped = true, enchantID = enchantInfo.enchantID, enchantName = enchantName }
                 end
             end
@@ -281,7 +285,7 @@ function GB:GetRowBuff(catID, profID)
     local selected, fallback = self:GetSelectedBuff(catID, profID), nil
     for _, buff in ipairs(cat.buffs) do
         if GB.BuffMatchesProfession(buff, profID) then
-            if not fallback or (selected and GB.GetBuffKey(catID, buff) == GB.GetBuffKey(catID, selected)) then
+            if not fallback or (selected and buff == selected) then
                 fallback = buff
             end
             local aura = GB.GetPlayerAuraForBuff(buff) or CheckEquipped(cat, buff, profID)

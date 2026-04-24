@@ -69,7 +69,7 @@ function GB:HasShatteredEssenceAura()
     return GB.GetPlayerAura(SHATTERED_ESSENCE_SPELL_ID) ~= nil
 end
 
-function GB:ShouldBlockDisenchantWithoutShatteredEssence()
+function GB:ShouldWarnDisenchantWithoutShatteredEssence()
     return self.db
         and self.db.modules
         and self.db.modules.enchantingRequireShatteredEssence == true
@@ -80,6 +80,22 @@ function GB:ShouldBlockDisenchantWithoutShatteredEssence()
 end
 
 function GB:IsPendingDisenchantSpell()
+    local targetingSpell = SpellIsTargeting and SpellIsTargeting() or false
+    local disenchantName = GB.GetSpellNameByID(DISENCHANT_SPELL_ID)
+
+    if targetingSpell and IsCurrentSpell then
+        local okByID, isCurrentByID = pcall(IsCurrentSpell, DISENCHANT_SPELL_ID)
+        if okByID and isCurrentByID then
+            return true
+        end
+        if disenchantName then
+            local okByName, isCurrentByName = pcall(IsCurrentSpell, disenchantName)
+            if okByName and isCurrentByName then
+                return true
+            end
+        end
+    end
+
     local cursorType, cursorID
     if GetCursorInfo then
         cursorType, cursorID = GetCursorInfo()
@@ -92,7 +108,6 @@ function GB:IsPendingDisenchantSpell()
 
     if currentSpellID then
         local currentSpellName = GB.GetSpellNameByID(currentSpellID)
-        local disenchantName = GB.GetSpellNameByID(DISENCHANT_SPELL_ID)
         if currentSpellName and disenchantName and currentSpellName == disenchantName then
             return true
         end
@@ -103,13 +118,19 @@ function GB:IsPendingDisenchantSpell()
         if okByID and isCurrentByID then
             return true
         end
+        if disenchantName then
+            local okByName, isCurrentByName = pcall(IsCurrentSpell, disenchantName)
+            if okByName and isCurrentByName then
+                return true
+            end
+        end
     end
 
     return false
 end
 
-function GB:MaybeBlockDisenchant()
-    if not self:ShouldBlockDisenchantWithoutShatteredEssence() then
+function GB:MaybeWarnDisenchant()
+    if not self:ShouldWarnDisenchantWithoutShatteredEssence() then
         return false
     end
 
@@ -117,17 +138,10 @@ function GB:MaybeBlockDisenchant()
         return false
     end
 
-    if SpellStopTargeting then
-        pcall(SpellStopTargeting)
-    end
-    if ClearCursor then
-        ClearCursor()
-    end
-
     local now = (GetTime and GetTime()) or 0
-    if not self.lastDisenchantBlockAt or (now - self.lastDisenchantBlockAt) >= 1 then
-        self.lastDisenchantBlockAt = now
-        print("|cffff6644GatherBuffs:|r Disenchant blocked until |cff00ee44Shattered Essence|r is active.")
+    if not self.lastDisenchantWarnAt or (now - self.lastDisenchantWarnAt) >= 1 then
+        self.lastDisenchantWarnAt = now
+        print("|cffff6644GatherBuffs:|r Missing |cff00ee44Shattered Essence|r before disenchanting.")
     end
 
     return true

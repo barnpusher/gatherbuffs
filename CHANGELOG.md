@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.99.21
+
+- Replaced the unreliable Shattered Essence disenchant block with a warning when Disenchant is selected without the buff active
+- Corrected Midnight tea aura spell IDs so Argentleaf, Sanguithorn, and Azeroot resolve by their real active buffs
+- Removed the obsolete Phial of Truesight from tracking and settings
+- Used recent consumable bag deltas as a fallback to identify shared food buffs and unresolved weaponstone variants
+- Resolved shared tea food auras by reading the active aura tooltip so the specific tea row can switch to the correct active tea
+- Fixed the profit session timer so logged-out time no longer counts toward elapsed session time
+- Unified rank-based consumable selections for shared buffs and show lower-than-max active quality in yellow instead of splitting `Q1/Q2` choices
+
 ## 0.99.20
 
 - Removed pre-Midnight razorstones from buff tracking and settings

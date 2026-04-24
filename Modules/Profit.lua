@@ -131,6 +131,13 @@ function GB:LoadSessionState()
     self.sessionPaused = session.paused ~= false
     self.sessionPausedAt = session.pausedAt or 0
     self.sessionPausedTotal = session.pausedTotal or 0
+    self.sessionLastSavedAt = session.lastSavedAt or self.sessionStart
+    if not self.sessionPaused and self.sessionLastSavedAt and self.sessionLastSavedAt > 0 then
+        local now = time()
+        if now > self.sessionLastSavedAt then
+            self.sessionPausedTotal = (self.sessionPausedTotal or 0) + (now - self.sessionLastSavedAt)
+        end
+    end
     self.sessionBaselineInitialized = session.inventoryBaselineInitialized == true
     self.sessionBaseline = {}
     self.sessionLoot = {}
@@ -189,11 +196,13 @@ function GB:LoadSessionState()
 end
 
 function GB:SaveSessionState()
+    self.sessionLastSavedAt = time()
     local session = {
         startedAt = self.sessionStart or time(),
         paused = self.sessionPaused or false,
         pausedAt = self.sessionPausedAt or 0,
         pausedTotal = self.sessionPausedTotal or 0,
+        lastSavedAt = self.sessionLastSavedAt,
         inventoryBaselineInitialized = self.sessionBaselineInitialized == true,
         inventoryBaseline = {},
         loot = {},
